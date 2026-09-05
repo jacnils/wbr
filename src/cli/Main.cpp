@@ -31,6 +31,11 @@ distribution.
 #include <iostream>
 #include <filesystem>
 #include <cmath>
+#ifdef __WIN32__
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
 #include <algorithm>
 #include <array>
 #include <sstream>
@@ -74,6 +79,14 @@ struct Render {
 	std::filesystem::path input;
 	std::filesystem::path output;
 };
+
+int get_proc() {
+#ifdef __WIN32__
+	return _getpid();
+#else
+	return getpid();
+#endif
+}
 
 // wrapper for opening processes
 struct ProcPtr {
@@ -166,15 +179,20 @@ int process(const Render& input_opening, Settings settings = {}) {
 
 	std::cout << "Processing: " << opening << "\n";
 
+	std::filesystem::path extraction_dir =
+		std::filesystem::temp_directory_path() /
+		("wbr-" + std::to_string(get_proc()));
+
 	if (std::filesystem::path(opening).extension() == ".wad") {
 		std::ifstream in(opening, std::ios::binary);
 		if (!in) {
 			std::cerr << "Input file does not exist or cannot be read: " << input_opening.input << "\n";
 			return EXIT_FAILURE;
 		}
-		Wad::extract_wad(in, "tmp");
 
-		for (const auto& entry : std::filesystem::directory_iterator("tmp"))
+		Wad::extract_wad(in, extraction_dir.string());
+
+		for (const auto& entry : std::filesystem::directory_iterator(extraction_dir))
 		{
 			if (!entry.is_regular_file())
 				continue;
@@ -363,8 +381,8 @@ int process(const Render& input_opening, Settings settings = {}) {
     banner.UnloadBanner();
 
 	// clean temp files and directories TODO: dont write wav to disk at all
-	if (std::filesystem::is_directory("tmp")) {
-		std::filesystem::remove_all("tmp");
+	if (std::filesystem::is_directory(extraction_dir)) {
+		std::filesystem::remove_all(extraction_dir);
 	}
 	if (!settings.no_audio && std::filesystem::is_regular_file(base_filename + ".wav")) {
 		std::filesystem::remove(base_filename + ".wav");
