@@ -23,8 +23,8 @@ distribution.
 
 #include <GL/glew.h>
 
-#include "Window.h"
-#include "Endian.h"
+#include "../include/libwb/Window.h"
+#include "../include/libwb/Endian.h"
 
 namespace WiiBanner
 {
@@ -37,12 +37,12 @@ void Window::Load(std::istream& file)
 
 	file >> BE >> inflation.l >> inflation.r >> inflation.t >> inflation.b;
 
-	u8 frame_count;
+	uint8_t frame_count;
 
 	file >> BE >> frame_count;
 	file.seekg(3, std::ios::cur);
 
-	u32 content_offset, frame_table_offset;
+	uint32_t content_offset, frame_table_offset;
 
 	file >> BE >> content_offset >> frame_table_offset;
 
@@ -52,7 +52,7 @@ void Window::Load(std::istream& file)
 
 	// read frames
 	file.seekg(section_start + frame_table_offset, std::ios::beg);
-	ReadOffsetList<u32>(file, frame_count, file.tellg(), [&]
+	ReadOffsetList<uint32_t>(file, frame_count, file.tellg(), [&]
 	{
 		Frame frame;
 		file >> BE >> frame.material_index >> frame.texture_flip;
@@ -61,7 +61,7 @@ void Window::Load(std::istream& file)
 	});
 }
 
-void Window::Draw(const Resources& resources, u8 render_alpha) const
+void Window::Draw(const Resources& resources, uint8_t render_alpha) const
 {
 	// TODO: handle "inflation"
 	// TODO: handle "frames" and "texture_flip"

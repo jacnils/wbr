@@ -7,9 +7,10 @@
 #include <cstdint>
 #include <cstring>
 
-#include <Wad.h>
+#include <libwb/Wad.h>
 
-#include <openssl/evp.h>
+#include <wolfssl/options.h>
+#include <wolfssl/wolfcrypt/aes.h>
 
 using u8  = uint8_t;
 using u16 = uint16_t;
@@ -42,46 +43,30 @@ struct WadSections {
     u32 trailer_len{};
 };
 
-std::vector<u8> aes_ecb_decrypt(const u8 key[16], const u8* data, size_t len) {
-    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-    if (!ctx) throw std::runtime_error("EVP ctx failed");
-
-    std::vector<u8> out(len + 16);
-
-    int outlen1 = 0, outlen2 = 0;
-
-    EVP_DecryptInit_ex(ctx, EVP_aes_128_ecb(), nullptr, key, nullptr);
-    EVP_CIPHER_CTX_set_padding(ctx, 0);
-
-    EVP_DecryptUpdate(ctx, out.data(), &outlen1, data, (int)len);
-    EVP_DecryptFinal_ex(ctx, out.data() + outlen1, &outlen2);
-
-    EVP_CIPHER_CTX_free(ctx);
-
-    out.resize(outlen1 + outlen2);
-    return out;
-}
-
 std::vector<u8> aes_cbc_decrypt(const std::vector<u8>& data, const u8 key[16], const u8 iv[16]) {
-    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-    if (!ctx) throw std::runtime_error("EVP ctx failed");
+    if (data.size() % AES_BLOCK_SIZE != 0)
+        throw std::runtime_error("ciphertext not block-aligned");
 
-    std::vector<u8> out(data.size() + 16);
+    Aes aes;
+    int ret = wc_AesInit(&aes, nullptr, INVALID_DEVID);
+    if (ret != 0) throw std::runtime_error("wc_AesInit failed");
 
-    int len = 0, total = 0;
+    ret = wc_AesSetKey(&aes, key, 16, iv, AES_DECRYPTION);
+    if (ret != 0) {
+        wc_AesFree(&aes);
+        throw std::runtime_error("wc_AesSetKey failed");
+    }
 
-    EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), nullptr, key, iv);
-    EVP_CIPHER_CTX_set_padding(ctx, 0);
+    std::vector<u8> out(data.size());
+    if (!data.empty()) {
+        ret = wc_AesCbcDecrypt(&aes, out.data(), data.data(), (u32)data.size());
+        if (ret != 0) {
+            wc_AesFree(&aes);
+            throw std::runtime_error("wc_AesCbcDecrypt failed");
+        }
+    }
 
-    EVP_DecryptUpdate(ctx, out.data(), &len, data.data(), (int)data.size());
-    total = len;
-
-    EVP_DecryptFinal_ex(ctx, out.data() + len, &len);
-    total += len;
-
-    EVP_CIPHER_CTX_free(ctx);
-
-    out.resize(total);
+    wc_AesFree(&aes);
     return out;
 }
 
@@ -144,22 +129,27 @@ std::vector<TmdContent> parse_tmd_contents(const std::vector<u8>& tmd) {
     return out;
 }
 
-std::array<u8,16> get_title_key(const std::vector<u8>& tik) {
+std::array<u8, 16> get_title_key(const std::vector<u8>& tik)
+{
     const u8* enc_key = tik.data() + 0x1BF;
     const u8* title_id = tik.data() + 0x1DC;
 
-    // IV = title_id + padding
-    u8 iv[16] = {};
-    memcpy(iv, title_id, 8);
+    u8 iv[16]{};
+    std::memcpy(iv, title_id, 8);
+
+    std::vector<u8> encrypted(enc_key, enc_key + 16);
 
     auto dec = aes_cbc_decrypt(
-        std::vector<u8>(enc_key, enc_key + 16),
+        encrypted,
         WII_COMMON_KEY,
         iv
     );
 
-    std::array<u8,16> key{};
-    memcpy(key.data(), dec.data(), 16);
+    std::array<u8, 16> key{};
+
+    if (!dec.empty())
+        std::memcpy(key.data(), dec.data(), 16);
+
     return key;
 }
 
@@ -221,7 +211,7 @@ void extract_contents_decrypted(const WadSections& s, const std::filesystem::pat
     }
 }
 
-void extract_wad(std::ifstream& in, const std::string& out_dir) {
+void Wad::extract_wad(std::ifstream& in, const std::string& out_dir) {
     std::vector<u8> header(0x80);
 
     in.read(reinterpret_cast<char*>(header.data()), 0x40);

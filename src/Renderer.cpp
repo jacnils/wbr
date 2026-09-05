@@ -1,5 +1,5 @@
-#include "Renderer.h"
-#include "WrapGx.h"
+#include "../include/libwb/Renderer.h"
+#include "../include/libwb/WrapGx.h"
 #if defined(__APPLE__)
 #include <GL/glew.h>
 #include <OpenGL/OpenGL.h>
@@ -29,7 +29,7 @@
 #include <cstring>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
+#include "../include/libwb/stb_image_write.h"
 
 #ifndef GL_MACOS
 Renderer::Renderer(int width, int height)

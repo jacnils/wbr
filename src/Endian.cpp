@@ -24,7 +24,7 @@ distribution.
 // from dolphin
 #include "CommonFuncs.h"
 
-#include "Endian.h"
+#include "../include/libwb/Endian.h"
 
 BEStreamManip BE;
 LEStreamManip LE;

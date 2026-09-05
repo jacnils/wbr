@@ -24,7 +24,7 @@
 
 // hacks
 //#include "../../../Source/Endian.h"
-#include <Endian.h>
+#include <../../include/libwb/Endian.h>
 
 #define ARC_ID 0x55aa382d
 

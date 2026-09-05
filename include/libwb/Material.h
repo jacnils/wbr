@@ -23,8 +23,8 @@ distribution.
 
 #pragma once
 
-#include "Animator.h"
-#include "Texture.h"
+#include <libwb/Animator.h>
+#include <libwb/Texture.h>
 
 namespace WiiBanner
 {
@@ -40,13 +40,13 @@ public:
 		NAME_LENGTH = 20
 	};
 
-	static constexpr u32 MAX_TEX_MAP = 8;
-	static constexpr u32 MAX_TEX_SRT = 10;
-	static constexpr u32 MAX_TEX_GEN = 8;
-	static constexpr u32 MAX_IND_STAGES = 4;
-	static constexpr u32 MAX_TEV_STAGES = 16;
+	static constexpr uint32_t MAX_TEX_MAP = 8;
+	static constexpr uint32_t MAX_TEX_SRT = 10;
+	static constexpr uint32_t MAX_TEX_GEN = 8;
+	static constexpr uint32_t MAX_IND_STAGES = 4;
+	static constexpr uint32_t MAX_TEV_STAGES = 16;
 
-	static constexpr u8 PALETTE_DEFAULT = 0xFF;
+	static constexpr uint8_t PALETTE_DEFAULT = 0xFF;
 
 	void Load(std::istream& file);
 	Material() {
@@ -63,39 +63,39 @@ protected:
 private:
 	union
 	{
-		u32 value;
+		uint32_t value;
 
 		struct
 		{
-			u32 texture_map : 4;
-			u32 texture_srt : 4;
-			u32 texture_coord_gen : 4;
-			u32 tev_swap_table : 1;
-			u32 ind_srt : 2;
-			u32 ind_stage : 3;
-			u32 tev_stage : 5;
-			u32 alpha_compare : 1;
-			u32 blend_mode : 1;
-			u32 channel_control : 1;
-			u32 pad : 1;
-			u32 material_color : 1;
-			u32 pad2 : 4;
+			uint32_t texture_map : 4;
+			uint32_t texture_srt : 4;
+			uint32_t texture_coord_gen : 4;
+			uint32_t tev_swap_table : 1;
+			uint32_t ind_srt : 2;
+			uint32_t ind_stage : 3;
+			uint32_t tev_stage : 5;
+			uint32_t alpha_compare : 1;
+			uint32_t blend_mode : 1;
+			uint32_t channel_control : 1;
+			uint32_t pad : 1;
+			uint32_t material_color : 1;
+			uint32_t pad2 : 4;
 		};
 
 	} flags{};
 
-	u8 palette_texture[MAX_TEX_MAP]{};
+	uint8_t palette_texture[MAX_TEX_MAP]{};
 
 	struct TextureMap
 	{
-		u16 tex_index;
-		u8 wrap_s, wrap_t;
+		uint16_t tex_index;
+		uint8_t wrap_s, wrap_t;
 	};
 	std::vector<TextureMap> texture_maps;
 
 	struct TextureCoordGen
 	{
-		u8 tgen_type, tgen_src, mtrx_src;
+		uint8_t tgen_type, tgen_src, mtrx_src;
 	};
 	std::vector<TextureCoordGen> texture_coord_gens;
 
@@ -114,24 +114,24 @@ private:
 
 	struct
 	{
-		u8 type, src_factor, dst_factor, logical_op;
+		uint8_t type, src_factor, dst_factor, logical_op;
 
 	} blend_mode{};
 
 	struct
 	{
-		u8 function, op, ref0, ref1;
+		uint8_t function, op, ref0, ref1;
 
 	} alpha_compare{};
 
 	union {
-		u8 value;
+		uint8_t value;
 
 		struct {
-			u8 r : 2;
-			u8 g : 2;
-			u8 b : 2;
-			u8 a : 2;
+			uint8_t r : 2;
+			uint8_t g : 2;
+			uint8_t b : 2;
+			uint8_t a : 2;
 		};
 
 	} tev_swap_table[4]{};
@@ -152,50 +152,50 @@ private:
 
 		struct
 		{
-			u8 tex_coord;
-			u8 color;
+			uint8_t tex_coord;
+			uint8_t color;
 
-			u16 tex_map : 9;
-			u16 ras_sel : 2;
-			u16 tex_sel : 2;
-			u16 empty1 : 3;
+			uint16_t tex_map : 9;
+			uint16_t ras_sel : 2;
+			uint16_t tex_sel : 2;
+			uint16_t empty1 : 3;
 
 			struct
 			{
-				u8 a : 4;
-				u8 b : 4;
+				uint8_t a : 4;
+				uint8_t b : 4;
 
-				u8 c : 4;
-				u8 d : 4;
+				uint8_t c : 4;
+				uint8_t d : 4;
 
-				u8 op : 4;
-				u8 bias: 2;
-				u8 scale : 2;
+				uint8_t op : 4;
+				uint8_t bias: 2;
+				uint8_t scale : 2;
 
-				u8 clamp : 1;
-				u8 reg_id : 2;
-				u8 constant_sel : 5;
+				uint8_t clamp : 1;
+				uint8_t reg_id : 2;
+				uint8_t constant_sel : 5;
 
 			} color_in, alpha_in;
 
 			struct
 			{
-				u8 tex_id : 2;
-				u8 empty1 : 6;
+				uint8_t tex_id : 2;
+				uint8_t empty1 : 6;
 
-				u8 bias : 3;
-				u8 mtx : 4;
-				u8 empty2 : 1;
+				uint8_t bias : 3;
+				uint8_t mtx : 4;
+				uint8_t empty2 : 1;
 
-				u8 wrap_s : 3;
-				u8 wrap_t : 3;
-				u8 empty3 : 2;
+				uint8_t wrap_s : 3;
+				uint8_t wrap_t : 3;
+				uint8_t empty3 : 2;
 
-				u8 format : 2;
-				u8 add_prev : 1;
-				u8 utc_lod : 1;
-				u8 alpha : 2;
-				u8 empty4 : 2;
+				uint8_t format : 2;
+				uint8_t add_prev : 1;
+				uint8_t utc_lod : 1;
+				uint8_t alpha : 2;
+				uint8_t empty4 : 2;
 
 			} ind;
 		};
@@ -211,7 +211,7 @@ private:
 class MaterialList : public std::vector<Material*>
 {
 public:
-	static constexpr u32 BINARY_MAGIC = MAKE_FOURCC('m', 'a', 't', '1');
+	static constexpr uint32_t BINARY_MAGIC = MAKE_FOURCC('m', 'a', 't', '1');
 };
 
 }

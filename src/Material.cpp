@@ -23,21 +23,20 @@ distribution.
 
 #include <GL/glew.h>
 
-#include "Material.h"
-#include "Endian.h"
-#include "Funcs.h"
-#include "Layout.h"
-#include "Texture.h"
+#include <libwb/Material.h>
+#include <libwb/Endian.h>
+#include <libwb/Funcs.h>
+#include <libwb/Layout.h>
+#include <libwb/Texture.h>
 
 namespace WiiBanner
 {
 
-void Material::Load(std::istream& file)
-{
+void Material::Load(std::istream& file) {
 	SetName(ReadFixedLengthString<NAME_LENGTH>(file));
 
 	// read colors
-	ReadBEArray(file, &color_regs->r, sizeof(color_regs) / sizeof(s16));
+	ReadBEArray(file, &color_regs->r, sizeof(color_regs) / sizeof(int16_t));
 	ReadBEArray(file, &color_constants->r, sizeof(color_constants));
 
 	file >> BE >> flags.value;
@@ -45,7 +44,7 @@ void Material::Load(std::istream& file)
 	//std::cout << "flags: " << flags.value << '\n';
 
 	// texture map
-	for (u32 i = 0; i != flags.texture_map; ++i)
+	for (uint32_t i = 0; i != flags.texture_map; ++i)
 	{
 		TextureMap map{};
 		file >> BE >> map.tex_index >> map.wrap_s >> map.wrap_t;
@@ -54,7 +53,7 @@ void Material::Load(std::istream& file)
 	}
 
 	// texture srt
-	for (u32 i = 0; i != flags.texture_srt; ++i)
+	for (uint32_t i = 0; i != flags.texture_srt; ++i)
 	{
 		TextureSrt srt{};
 
@@ -74,7 +73,7 @@ void Material::Load(std::istream& file)
 	//}
 
 	// texture coord gen
-	for (u32 i = 0; i != flags.texture_coord_gen; ++i)
+	for (uint32_t i = 0; i != flags.texture_coord_gen; ++i)
 	{
 		TextureCoordGen coord{};
 
@@ -96,7 +95,7 @@ void Material::Load(std::istream& file)
 	// channel control
 	if (flags.channel_control)
 	{
-		u8 color_matsrc, alpha_matsrc;
+		uint8_t color_matsrc, alpha_matsrc;
 
 		file >> BE >> color_matsrc >> alpha_matsrc;
 		file.seekg(2, std::ios::cur);
@@ -151,7 +150,7 @@ void Material::Load(std::istream& file)
 	}
 
 	// ind srt
-	for (u32 i = 0; i != flags.ind_srt; ++i)
+	for (uint32_t i = 0; i != flags.ind_srt; ++i)
 	{
 		IndSrt srt{};
 
@@ -175,10 +174,10 @@ void Material::Load(std::istream& file)
 	}
 
 	// ind stage
-	for (u32 i = 0; i != flags.ind_stage; ++i)
+	for (uint32_t i = 0; i != flags.ind_stage; ++i)
 	{
 		// TODO: store these
-		u8 tex_coord, tex_map, scale_s, scale_t;
+		uint8_t tex_coord, tex_map, scale_s, scale_t;
 
 		file >> BE >> tex_coord >> tex_map >> scale_s, scale_t;
 
@@ -191,7 +190,7 @@ void Material::Load(std::istream& file)
 	}
 
 	// tev stage
-	for (u32 i = 0; i != flags.tev_stage; ++i)
+	for (uint32_t i = 0; i != flags.tev_stage; ++i)
 	{
 		TevStage ts{};
 
@@ -279,9 +278,9 @@ void Material::Load(std::istream& file)
 }
 
 void Material::ApplyTextures(const Resources &resources) const {
-	u8 tlut_name = 0;
+	uint8_t tlut_name = 0;
 
-	for (u32 i = 0; i < flags.texture_map; ++i) {
+	for (uint32_t i = 0; i < flags.texture_map; ++i) {
 		const TextureMap& tr = texture_maps[i];
 
 		if (palette_texture[i] == PALETTE_DEFAULT)
@@ -298,7 +297,7 @@ void Material::ApplyTextures(const Resources &resources) const {
 			if (palette_texture[i] == PALETTE_DEFAULT)
 				continue;
 
-			u8 palette_set = resources.cur_set;
+			uint8_t palette_set = resources.cur_set;
 
 			if (palette_set >= resources.palettes.size()) {
 				palette_set = 0; // fallback, this is a hack
@@ -362,7 +361,7 @@ void Material::Apply(const Resources& resources) const
 
 		// TODO: not using "tgen_type", "tgen_src"
 
-		const u8 mtrx = (tcg.mtrx_src - 30) / 3;
+		const uint8_t mtrx = (tcg.mtrx_src - 30) / 3;
 
 		if (mtrx < texture_srts.size())
 		{
@@ -463,19 +462,19 @@ void Material::ProcessHermiteKey(const KeyType& type, float value)
 		if (type.target < 4)
 		{
 			// color
-			(&color.r)[type.target] = (u8)value;
+			(&color.r)[type.target] = (uint8_t)value;
 			return;
 		}
 		else if (type.target < 0x10)
 		{
 			// initial color of tev color/output registers, often used for foreground/background
-			(&color_regs->r)[type.target - 4] = (u16)value;
+			(&color_regs->r)[type.target - 4] = (uint16_t)value;
 			return;
 		}
 		else if (type.target < 0x20)
 		{
 			// tev color constants
-			(&color_constants->r)[type.target - 0x10] = (u8)value;
+			(&color_constants->r)[type.target - 0x10] = (uint8_t)value;
 			return;
 		}
 	}

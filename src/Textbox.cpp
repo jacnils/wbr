@@ -29,9 +29,9 @@ distribution.
 #include <limits>
 #include <vector>
 
-#include "Textbox.h"
-#include "Layout.h"
-#include "Endian.h"
+#include "../include/libwb/Textbox.h"
+#include "../include/libwb/Layout.h"
+#include "../include/libwb/Endian.h"
 
 namespace WiiBanner
 {
@@ -42,13 +42,13 @@ void Textbox::Load(std::istream& file)
 
 	Pane::Load(file);
 
-	u16 text_buf_bytes, text_str_bytes;
+	uint16_t text_buf_bytes, text_str_bytes;
 	file >> BE >> text_buf_bytes >> text_str_bytes
 		>> material_index >> font_index >> text_position >> text_alignment;
 
 	file.seekg(2, std::ios::cur);
 
-	u32 text_str_offset;
+	uint32_t text_str_offset;
 	file >> BE >> text_str_offset;
 
 	ReadBEArray(file, &colors->r, sizeof(colors));
@@ -58,9 +58,9 @@ void Textbox::Load(std::istream& file)
 	text.clear();
 	file.seekg(section_start + static_cast<std::streamoff>(text_str_offset),
 		std::ios::beg);
-	for (u16 i = 0; i < text_str_bytes / sizeof(u16); ++i)
+	for (uint16_t i = 0; i < text_str_bytes / sizeof(uint16_t); ++i)
 	{
-		u16 character;
+		uint16_t character;
 		file >> BE >> character;
 		if (!file || !character)
 			break;
@@ -68,7 +68,7 @@ void Textbox::Load(std::istream& file)
 	}
 }
 
-void Textbox::Draw(const Resources& resources, u8 render_alpha) const
+void Textbox::Draw(const Resources& resources, uint8_t render_alpha) const
 {
 	if (text.empty() || font_index >= resources.fonts.size())
 		return;
@@ -99,7 +99,7 @@ void Textbox::Draw(const Resources& resources, u8 render_alpha) const
 		}
 
 		Font::Glyph glyph;
-		if (!font->GetGlyph(static_cast<u16>(character), glyph))
+		if (!font->GetGlyph(static_cast<uint16_t>(character), glyph))
 			continue;
 
 		if (!first_character)
@@ -112,8 +112,8 @@ void Textbox::Draw(const Resources& resources, u8 render_alpha) const
 		line_widths.begin(), line_widths.end());
 	const float frame_height = font_height +
 		(line_widths.size() - 1) * line_advance;
-	const u8 align_horizontal = text_position % 3;
-	const u8 align_vertical = text_position / 3;
+	const uint8_t align_horizontal = text_position % 3;
+	const uint8_t align_vertical = text_position / 3;
 
 	auto line_start = [&](size_t line_number)
 	{
@@ -129,7 +129,7 @@ void Textbox::Draw(const Resources& resources, u8 render_alpha) const
 		align_vertical * -frame_height +
 		GetHeight() * (align_vertical - (2 - GetOriginY()))) - font_height;
 	size_t line_number = 0;
-	u16 last_sheet = std::numeric_limits<u16>::max();
+	uint16_t last_sheet = std::numeric_limits<uint16_t>::max();
 	first_character = true;
 
 	glPushMatrix();
@@ -148,7 +148,7 @@ void Textbox::Draw(const Resources& resources, u8 render_alpha) const
 		}
 
 		Font::Glyph glyph;
-		if (!font->GetGlyph(static_cast<u16>(character), glyph))
+		if (!font->GetGlyph(static_cast<uint16_t>(character), glyph))
 			continue;
 
 		if (!first_character)
@@ -203,12 +203,12 @@ void Textbox::ProcessHermiteKey(const KeyType& type, float value)
 	{
 		if (type.target < 4)
 		{
-			(&colors[0].r)[type.target] = static_cast<u8>(value);
+			(&colors[0].r)[type.target] = static_cast<uint8_t>(value);
 			return;
 		}
 		if (type.target >= 8 && type.target < 12)
 		{
-			(&colors[1].r)[type.target - 8] = static_cast<u8>(value);
+			(&colors[1].r)[type.target - 8] = static_cast<uint8_t>(value);
 			return;
 		}
 	}
