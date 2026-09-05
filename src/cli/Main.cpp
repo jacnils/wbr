@@ -259,7 +259,7 @@ int process(const Render& input_opening, Settings settings = {}) {
 		throw std::runtime_error{"layout == nullptr"};
 	}
 
-    layout->SetLanguage("ENG");
+	layout->SetLanguage("ENG");
 
 	if (!settings.no_audio) {
 		if (!banner.GetSound()) {
@@ -354,7 +354,7 @@ int process(const Render& input_opening, Settings settings = {}) {
 			std::to_string(static_cast<int>(VIDEO_HEIGHT * settings.resolution_multiplier)) + " "
 		"-framerate " + std::to_string(settings.fps) + " "
 		"-i - " + audio_param +
-		"-map 0:v:0 -map 1:a:0 "
+		"-map 0:v:0" + (!audio_param.empty() ? " -map 1:a:0 " : " ") +
 		"-t " + std::to_string(runtime) + " " + crop +
 		output_format,
 		"w"
