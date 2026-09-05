@@ -1,0 +1,7 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+find_dependency(wolfSSL)
+
+include("${CMAKE_CURRENT_LIST_DIR}/wbTargets.cmake")

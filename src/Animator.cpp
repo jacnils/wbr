@@ -21,28 +21,28 @@ misrepresented as being the original software.
 distribution.
 */
 
+#include <libwb/Animator.h>
+#include <libwb/Funcs.h>
+#include <libwb/Endian.h>
+#include <libwb/Layout.h>
+
 #include <cmath>
 
-#include "Animator.h"
-#include "Endian.h"
-#include "Funcs.h"
-#include "Layout.h"
-
-enum BinaryMagic : u32 {
+enum BinaryMagic : uint32_t {
 	BINARY_MAGIC_ANIMATION = MAKE_FOURCC('R', 'L', 'A', 'N'),
 	BINARY_MAGIC_PANE_ANIMATION_INFO = MAKE_FOURCC('p', 'a', 'i', '1')
 };
 
 namespace WiiBanner {
-	FrameNumber Animator::LoadAnimators(std::istream& file, Layout& layout, u8 key_set) {
+	FrameNumber Animator::LoadAnimators(std::istream& file, Layout& layout, uint8_t key_set) {
 		const std::streamoff file_start = file.tellg();
 
-		u16 frame_count;
+		uint16_t frame_count;
 
 		// read header
 		FourCC header_magic;
-		u16 endian; // always 0xFEFF
-		u16 version; // always 0x0008
+		uint16_t endian; // always 0xFEFF
+		uint16_t version; // always 0x0008
 
 		file >> header_magic >> BE >> endian >> version;
 
@@ -53,9 +53,9 @@ namespace WiiBanner {
 			return 0;	// bad header
 
 
-		u32 file_size;
-		u16 offset; // offset to the first section
-		u16 section_count;
+		uint32_t file_size;
+		uint16_t offset; // offset to the first section
+		uint16_t section_count;
 
 		file >> BE >> file_size >> offset >> section_count;
 
@@ -70,11 +70,11 @@ namespace WiiBanner {
 		{
 			if (magic == BINARY_MAGIC_PANE_ANIMATION_INFO)
 			{
-				u8 loop; // ?
-				u8 pad;
-				u16 file_count; // ?
-				u16 animator_count;
-				u32 entry_offset;
+				uint8_t loop; // ?
+				uint8_t pad;
+				uint16_t file_count; // ?
+				uint16_t animator_count;
+				uint32_t entry_offset;
 
 				file >> BE >> frame_count >> loop
 					>> pad >> file_count >> animator_count;
@@ -83,12 +83,12 @@ namespace WiiBanner {
 
 				const std::streamoff name_table_start = file.tellg();
 
-				std::vector<u32> name_offsets(file_count);
-				for (u32 i = 0; i < file_count; i++) {
+				std::vector<uint32_t> name_offsets(file_count);
+				for (uint32_t i = 0; i < file_count; i++) {
 					file >> BE >> name_offsets[i];
 				}
 
-				for (u32 i = 0; i < file_count; i++) {
+				for (uint32_t i = 0; i < file_count; i++) {
 					file.seekg(name_table_start + static_cast<std::streamoff>(name_offsets[i]));
 					std::string name;
 					std::getline(file, name, '\0'); // null-terminated string
@@ -101,15 +101,15 @@ namespace WiiBanner {
 				file.seekg(section_start + entry_offset);
 
 				// read each animator
-				ReadOffsetList<u32>(file, animator_count, section_start, [&]
+				ReadOffsetList<uint32_t>(file, animator_count, section_start, [&]
 				{
 					const std::streamoff origin = file.tellg();
 
 					const std::string animator_name = ReadFixedLengthString<Animator::NAME_LENGTH>(file);
 
-					u8 tag_count;
-					u8 is_material;
-					u16 apad;
+					uint8_t tag_count;
+					uint8_t is_material;
+					uint16_t apad;
 
 					file >> BE >> tag_count >> is_material >> apad;
 
@@ -131,26 +131,26 @@ namespace WiiBanner {
 		return frame_count;
 	}
 
-void Animator::LoadKeyFrames(std::istream& file, u8 tag_count, std::streamoff origin, u8 key_set) {
-	ReadOffsetList<u32>(file, tag_count, origin, [&]
+void Animator::LoadKeyFrames(std::istream& file, uint8_t tag_count, std::streamoff origin, uint8_t key_set) {
+	ReadOffsetList<uint32_t>(file, tag_count, origin, [&]
 	{
 		const std::streamoff frame_origin = file.tellg();
 
-		u32 animation_type;
-		u8 entry_count;
+		uint32_t animation_type;
+		uint8_t entry_count;
 
 		file >> BE >> animation_type >> entry_count;
 		file.seekg(3, std::ios::cur);	// some padding
 
-		ReadOffsetList<u32>(file, entry_count, frame_origin, [&]
+		ReadOffsetList<uint32_t>(file, entry_count, frame_origin, [&]
 		{
-			u8 index;
-			u8 target;
-			u8 data_type;
-			u8 pad;
-			u16 key_count;
-			u16 pad1;
-			u32 offset;	// TODO: handle this
+			uint8_t index;
+			uint8_t target;
+			uint8_t data_type;
+			uint8_t pad;
+			uint16_t key_count;
+			uint16_t pad1;
+			uint32_t offset;	// TODO: handle this
 
 			file >> BE >> index >> target >> data_type >> pad
 				>> key_count >> pad1 >> offset;
@@ -177,7 +177,7 @@ void Animator::LoadKeyFrames(std::istream& file, u8 tag_count, std::streamoff or
 	});
 }
 
-void Animator::SetFrame(FrameNumber frame_number, u8 key_set)
+void Animator::SetFrame(FrameNumber frame_number, uint8_t key_set)
 {
 	for (auto& frame_handler : keys[key_set].hermite_keys)
 	{
@@ -196,7 +196,7 @@ void Animator::SetFrame(FrameNumber frame_number, u8 key_set)
 	}
 }
 
-void StepKeyHandler::Load(std::istream& file, u16 count)
+void StepKeyHandler::Load(std::istream& file, uint16_t count)
 {
 	while (count--)
 	{
@@ -212,7 +212,7 @@ void StepKeyHandler::Load(std::istream& file, u16 count)
 	}
 }
 
-void HermiteKeyHandler::Load(std::istream& file, u16 count)
+void HermiteKeyHandler::Load(std::istream& file, uint16_t count)
 {
 	while (count--)
 	{

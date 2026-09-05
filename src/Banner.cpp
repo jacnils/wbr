@@ -34,11 +34,11 @@ distribution.
 // from dolphin
 #include "FileHandlerARC.h"
 
-#include "Banner.h"
-#include "LZ77.h"
-#include "Sound.h"
-#include "Endian.h"
-#include "Types.h"
+#include "../include/libwb/Banner.h"
+#include "../include/libwb/LZ77.h"
+#include "../include/libwb/Sound.h"
+#include "../include/libwb/Endian.h"
+#include "../include/libwb/Types.h"
 
 namespace WiiBanner
 {

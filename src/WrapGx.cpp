@@ -37,9 +37,9 @@ distribution.
 // from dolphin
 #include "TextureDecoder.h"
 
-#include "WrapGx.h"
+#include "../include/libwb/WrapGx.h"
 
-#include "Funcs.h"
+#include "../include/libwb/Funcs.h"
 
 static u8 g_texture_decode_buffer[1024 * 1024 * 4];
 

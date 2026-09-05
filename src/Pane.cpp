@@ -23,10 +23,10 @@ distribution.
 
 #include <GL/glew.h>
 
-#include "Pane.h"
-#include "Layout.h"
-#include "Endian.h"
-#include "Funcs.h"
+#include <libwb/Pane.h>
+#include <libwb/Layout.h>
+#include <libwb/Endian.h>
+#include <libwb/Funcs.h>
 
 namespace WiiBanner
 {
@@ -56,7 +56,7 @@ Pane::~Pane()
 		delete pane;
 }
 
-void Pane::SetFrame(FrameNumber frame, u8 key_set)
+void Pane::SetFrame(FrameNumber frame, uint8_t key_set)
 {
 	// setframe on self
 	Animator::SetFrame(frame, key_set);
@@ -66,11 +66,11 @@ void Pane::SetFrame(FrameNumber frame, u8 key_set)
 		pane->SetFrame(frame, key_set);
 }
 
-void Pane::Render(const Resources& resources, u8 parent_alpha, bool widescreen) const {
+void Pane::Render(const Resources& resources, uint8_t parent_alpha, bool widescreen) const {
 	if (!GetVisible() || GetHide())
 		return;
 
-	u8 render_alpha =
+	uint8_t render_alpha =
 		GetInfluencedAlpha()
 			? MultiplyColors(parent_alpha, GetAlpha())
 			: GetAlpha();
@@ -133,7 +133,7 @@ void Pane::ProcessHermiteKey(const KeyType& type, float value)
 		// only alpha is supported for Panes afaict
 		if (0x10 == type.target)
 		{
-			alpha = (u8)value;
+			alpha = (uint8_t)value;
 			return;
 		}
 	}
@@ -181,7 +181,7 @@ void Quad::Load(std::istream& file)
 {
 	ReadBEArray(file, &vertex_colors->r, sizeof(vertex_colors));
 
-	u8 tex_coord_count;
+	uint8_t tex_coord_count;
 
 	file >> BE >> material_index >> tex_coord_count;
 	file.seekg(1, std::ios::cur);
@@ -191,7 +191,7 @@ void Quad::Load(std::istream& file)
 		ReadBEArray(file, &tex_coords[0].coords->s, sizeof(TexCoords) / sizeof(float) * tex_coord_count);
 }
 
-	void Quad::Draw(const Resources& resources, u8 render_alpha) const
+	void Quad::Draw(const Resources& resources, uint8_t render_alpha) const
 {
 	if (material_index < resources.materials.size())
 		resources.materials[material_index]->Apply(resources);
@@ -254,7 +254,7 @@ void Quad::ProcessHermiteKey(const KeyType& type, float value)
 		if (type.target < 0x10)
 		{
 			// vertex colors
-			(&vertex_colors->r)[type.target] = (u8)value;
+			(&vertex_colors->r)[type.target] = (uint8_t)value;
 			return;
 		}
 	}

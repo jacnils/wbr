@@ -24,23 +24,23 @@ distribution.
 #include <fstream>
 #include <set>
 
-#include "Texture.h"
-#include "Endian.h"
+#include "../include/libwb/Texture.h"
+#include "../include/libwb/Endian.h"
 
 namespace WiiBanner
 {
 
-enum BinaryMagic : u32
+enum BinaryMagic : uint32_t
 {
 	BINARY_MAGIC_TEXTURE = MAKE_FOURCC(0x00, ' ', 0xAF, 0x30)
 };
 
-static std::set<u32> g_occupied_tlut_names;
+static std::set<uint32_t> g_occupied_tlut_names;
 
-u32 GetFreeTlutName()
+uint32_t GetFreeTlutName()
 {
-	u32 ret = 1;
-	while (g_occupied_tlut_names.end() != g_occupied_tlut_names.find(ret))
+	uint32_t ret = 1;
+	while (g_occupied_tlut_names.contains(ret))
 		++ret;
 
 	return ret;
@@ -59,8 +59,8 @@ Texture::~Texture()
 	const std::streamoff file_start = file.tellg();
 
 	FourCC magic;
-	u32 texture_count;
-	u32 header_size;
+	uint32_t texture_count;
+	uint32_t header_size;
 
 	file >> magic >> BE >> texture_count >> header_size;
 
@@ -82,8 +82,8 @@ Texture::~Texture()
 	{
 		file.seekg(next_offset, std::ios::beg);
 
-		u32 texture_offset;
-		u32 palette_offset;
+		uint32_t texture_offset;
+		uint32_t palette_offset;
 
 		file >> BE >> texture_offset >> palette_offset;
 
@@ -94,8 +94,8 @@ Texture::~Texture()
 		{
 			file.seekg(file_start + palette_offset, std::ios::beg);
 
-			u16 palette_unused;
-			u32 palette_data_offset;
+			uint16_t palette_unused;
+			uint32_t palette_data_offset;
 
 			file >> BE >> tlut_count
 				>> palette_unused
@@ -112,23 +112,23 @@ Texture::~Texture()
 		// texture header
 		file.seekg(file_start + texture_offset, std::ios::beg);
 
-		u32 format;
-		u32 texture_data_offset;
+		uint32_t format;
+		uint32_t texture_data_offset;
 
-		u16 height;
-		u16 width;
+		uint16_t height;
+		uint16_t width;
 
-		u32 wrap_s;
-		u32 wrap_t;
+		uint32_t wrap_s;
+		uint32_t wrap_t;
 
-		u32 min_filter;
-		u32 mag_filter;
+		uint32_t min_filter;
+		uint32_t mag_filter;
 
 		float lod_bias;
-		u8 edge_lod;
-		u8 min_lod;
-		u8 max_lod;
-		u8 unpacked;
+		uint8_t edge_lod;
+		uint8_t min_lod;
+		uint8_t max_lod;
+		uint8_t unpacked;
 
 		file >> BE
 			>> height
@@ -147,7 +147,7 @@ Texture::~Texture()
 
 		file.seekg(file_start + texture_data_offset, std::ios::beg);
 
-		const u32 tex_size =
+		const uint32_t tex_size =
 			GX_GetTexBufferSize(width, height, format, true, max_lod);
 
 		img_ptr = new char[tex_size];
@@ -158,8 +158,8 @@ Texture::~Texture()
 		{
 			file.seekg(file_start + palette_offset, std::ios::beg);
 
-			u16 palette_unused;
-			u32 palette_data_offset;
+			uint16_t palette_unused;
+			uint32_t palette_data_offset;
 
 			file >> BE >> tlut_count
 				 >> palette_unused
@@ -207,7 +207,7 @@ Texture::~Texture()
 	}
 }
 
-void Texture::Apply(u8& tlutName, u8 map_id, u8 wrap_s, u8 wrap_t) const {
+void Texture::Apply(uint8_t& tlutName, uint8_t map_id, uint8_t wrap_s, uint8_t wrap_t) const {
 	if (map_id >= 8 || tlutName >= 20)
 		return;
 

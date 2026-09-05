@@ -25,16 +25,16 @@ distribution.
 
 #include <GL/glew.h>
 
-#include "Layout.h"
-#include "Picture.h"
-#include "Textbox.h"
-#include "Window.h"
-#include "Endian.h"
+#include <libwb/Layout.h>
+#include <libwb/Picture.h>
+#include <libwb/Textbox.h>
+#include <libwb/Window.h>
+#include <libwb/Endian.h>
 
 namespace WiiBanner
 {
 
-enum BinaryMagic : u32
+enum BinaryMagic : uint32_t
 {
 	BINARY_MAGIC_LAYOUT = MAKE_FOURCC('R', 'L', 'Y', 'T'),
 
@@ -62,11 +62,11 @@ void Layout::Load(std::istream& file)
 
 	// read header
 	FourCC header_magic;
-	u16 endian;
-	u16 version;
-	u32 filesize;
-	u16 first_section_offset; // offset to first section
-	u16 section_count;
+	uint16_t endian;
+	uint16_t version;
+	uint32_t filesize;
+	uint16_t first_section_offset; // offset to first section
+	uint16_t section_count;
 
 	file >> header_magic >> BE >> endian >> version
 		>> filesize >> first_section_offset >> section_count;
@@ -106,12 +106,12 @@ void Layout::Load(std::istream& file)
 		else if (magic == TextureList::BINARY_MAGIC)
 		{
 			// load texture list
-			u16 texture_count;
-			u16 offset;
+			uint16_t texture_count;
+			uint16_t offset;
 
 			file >> BE >> texture_count >> offset;
 
-			ReadOffsetList<u32>(file, texture_count, file.tellg(), [&]
+			ReadOffsetList<uint32_t>(file, texture_count, file.tellg(), [&]
 			{
 				auto* const texture = new Texture;
 				texture->SetName(ReadNullTerminatedString(file));
@@ -125,12 +125,12 @@ void Layout::Load(std::istream& file)
 		else if (magic == FontList::BINARY_MAGIC)
 		{
 			// load font list
-			u16 font_count;
-			u16 offset;
+			uint16_t font_count;
+			uint16_t offset;
 
 			file >> BE >> font_count >> offset;
 
-			ReadOffsetList<u32>(file, font_count, file.tellg(), [&]
+			ReadOffsetList<uint32_t>(file, font_count, file.tellg(), [&]
 			{
 				auto* const font = new Font;
 				font->SetName(ReadNullTerminatedString(file));
@@ -144,12 +144,12 @@ void Layout::Load(std::istream& file)
 		else if (magic == MaterialList::BINARY_MAGIC)
 		{
 			// load materials
-			u16 material_count;
-			u16 offset;
+			uint16_t material_count;
+			uint16_t offset;
 
 			file >> BE >> material_count >> offset;
 
-			ReadOffsetList<u32>(file, material_count, section_start, [&]
+			ReadOffsetList<uint32_t>(file, material_count, section_start, [&]
 			{
 				auto* const mat = new Material;
 				mat->Load(file);
@@ -192,7 +192,7 @@ void Layout::Load(std::istream& file)
 		{
 			Group& group_ref = (*group_stack.top())[ReadFixedLengthString<Layout::Group::NAME_LENGTH>(file)];
 
-			u16 sub_count;
+			uint16_t sub_count;
 			file >> BE >> sub_count;
 			file.seekg(2, std::ios::cur);
 
@@ -236,7 +236,7 @@ Layout::~Layout()
 		delete font;
 }
 
-void Layout::Render(float zoom, u8 render_alpha, bool widescreen) const {
+void Layout::Render(float zoom, uint8_t render_alpha, bool widescreen) const {
 	glPushMatrix();
 
 	glScalef(
@@ -265,7 +265,7 @@ void Layout::SetFrame(FrameNumber frame_number)
 {
 	frame_current = frame_number;
 
-	const u8 key_set = (frame_current >= frame_loop_start);
+	const uint8_t key_set = (frame_current >= frame_loop_start);
 	if (key_set)
 		frame_number -= frame_loop_start;
 
@@ -379,7 +379,7 @@ Texture* Layout::FindTexture(const std::string& find_name) {
 	return nullptr;
 }
 
-void Layout::AddPalette(const std::string& name, u8 key_set) {
+void Layout::AddPalette(const std::string& name, uint8_t key_set) {
 	std::cout << "AddPalette: " << name << "\n";
 
 	if (resources.palettes.size() <= key_set)

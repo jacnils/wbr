@@ -5,14 +5,12 @@
 [Showcase](https://www.youtube.com/watch?v=_UVSLDDvSd0)
 [Web version](https://forwarderfactory.com/banner-renderer/)
 
-**Note: Experimental, no support.**
-
 This program allows you to render a Wii banner to a video file. 
 It is based on the work of the Wii Banner Player team. 
 
-The program is compatible with Windows, macOS and Linux. Do however note that macOS support is questionable at best, given that Apple no longer supports OpenGL and have deprecated the APIs. However, they still seem to be functional.
-
-For Mac users, and everyone else, really, please check out the [web version](https://forwarderfactory.com/banner-renderer/).
+The program is compatible with Windows, macOS and Linux.
+Do however note that macOS support is questionable at best, given that Apple no longer supports OpenGL 
+and have deprecated the APIs. However, they still seem to be functional.
 
 ## Usage
 
@@ -24,13 +22,17 @@ Some banners use the Wii's shared bitmap fonts. Pass the shared content archive
 that contains `wbf1.brfna` and `wbf2.brfna` with
 `--font-archive <path>`, or set `WII_FONT_ARCHIVE`. The content filename is not
 fixed, so identify it by those files rather than assuming a particular `.app`
-number.
+number. 
+
+You can also place `00000003.app` and `00000011.app` from `shared1` in the working directory of the program. 
+You can obtain these files easily by installing the Wii System Menu in Dolphin, navigating to the virtual NAND 
+and copying them. These are not guaranteed to work in all cases, but I haven't yet come across any cases where
+doing this is not possible.
 
 ## Dependencies
 
 - GLEW
 - OpenGL
-- OpenSSL
 - EGL (Linux only)
 
 ## Prebuilt binaries

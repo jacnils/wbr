@@ -23,7 +23,7 @@ misrepresented as being the original software.
 distribution.
 */
 
-#include "Font.h"
+#include "../include/libwb/Font.h"
 
 #include <algorithm>
 #include <array>
@@ -34,7 +34,7 @@ namespace WiiBanner
 namespace
 {
 
-enum BinaryMagic : u32
+enum BinaryMagic : uint32_t
 {
 	BINARY_MAGIC_FONT = MAKE_FOURCC('R', 'F', 'N', 'T'),
 	BINARY_MAGIC_FONT_ARCHIVE = MAKE_FOURCC('R', 'F', 'N', 'A'),
@@ -45,30 +45,30 @@ enum BinaryMagic : u32
 	BINARY_MAGIC_CHARACTER_WIDTH = MAKE_FOURCC('C', 'W', 'D', 'H')
 };
 
-bool CanRead(const std::vector<u8>& data, size_t offset, size_t length)
+bool CanRead(const std::vector<uint8_t>& data, size_t offset, size_t length)
 {
 	return offset <= data.size() && length <= data.size() - offset;
 }
 
-u16 ReadBE16(const std::vector<u8>& data, size_t offset)
+uint16_t ReadBE16(const std::vector<uint8_t>& data, size_t offset)
 {
-	return static_cast<u16>((static_cast<u16>(data[offset]) << 8) |
+	return static_cast<uint16_t>((static_cast<uint16_t>(data[offset]) << 8) |
 		data[offset + 1]);
 }
 
-u32 ReadBE32(const std::vector<u8>& data, size_t offset)
+uint32_t ReadBE32(const std::vector<uint8_t>& data, size_t offset)
 {
-	return (static_cast<u32>(data[offset]) << 24) |
-		(static_cast<u32>(data[offset + 1]) << 16) |
-		(static_cast<u32>(data[offset + 2]) << 8) |
+	return (static_cast<uint32_t>(data[offset]) << 24) |
+		(static_cast<uint32_t>(data[offset + 1]) << 16) |
+		(static_cast<uint32_t>(data[offset + 2]) << 8) |
 		data[offset + 3];
 }
 
 bool DecompressHuffman8(
-	const u8* input,
+	const uint8_t* input,
 	size_t input_size,
 	size_t output_size,
-	std::vector<u8>& output)
+	std::vector<uint8_t>& output)
 {
 	if (input_size < 8 || input[0] != 0x28)
 		return false;
@@ -96,16 +96,16 @@ bool DecompressHuffman8(
 			byte_in_word >= 0 && output.size() < output_size;
 			--byte_in_word)
 		{
-			const u8 byte = input[word_offset + byte_in_word];
-			for (u8 bit_mask = 0x80;
+			const uint8_t byte = input[word_offset + byte_in_word];
+			for (uint8_t bit_mask = 0x80;
 				bit_mask && output.size() < output_size;
 				bit_mask >>= 1)
 			{
 				if (node_offset >= bitstream_offset)
 					return false;
 
-				const u8 node = input[node_offset];
-				const u8 direction = (byte & bit_mask) ? 1 : 0;
+				const uint8_t node = input[node_offset];
+				const uint8_t direction = (byte & bit_mask) ? 1 : 0;
 				const size_t child_offset = node_offset + direction +
 					((static_cast<size_t>(node) << 1) & 0x7e) +
 					(2 - (node_offset & 1));
@@ -113,7 +113,7 @@ bool DecompressHuffman8(
 				if (child_offset >= bitstream_offset)
 					return false;
 
-				if ((static_cast<u16>(node) << direction) & 0x80)
+				if ((static_cast<uint16_t>(node) << direction) & 0x80)
 				{
 					output.push_back(input[child_offset]);
 					node_offset = 5;
@@ -139,23 +139,23 @@ bool Font::Load(std::istream& file)
 	sheet_data.clear();
 	texture_objects.clear();
 
-	std::array<u8, 16> header{};
+	std::array<uint8_t, 16> header{};
 	file.read(reinterpret_cast<char*>(header.data()), header.size());
 	if (file.gcount() != static_cast<std::streamsize>(header.size()))
 		return false;
 
-	const u32 magic = (static_cast<u32>(header[0]) << 24) |
-		(static_cast<u32>(header[1]) << 16) |
-		(static_cast<u32>(header[2]) << 8) |
+	const uint32_t magic = (static_cast<uint32_t>(header[0]) << 24) |
+		(static_cast<uint32_t>(header[1]) << 16) |
+		(static_cast<uint32_t>(header[2]) << 8) |
 		header[3];
-	const u16 endian = static_cast<u16>((header[4] << 8) | header[5]);
-	const u16 version = static_cast<u16>((header[6] << 8) | header[7]);
-	const u32 file_size = (static_cast<u32>(header[8]) << 24) |
-		(static_cast<u32>(header[9]) << 16) |
-		(static_cast<u32>(header[10]) << 8) |
+	const uint16_t endian = static_cast<uint16_t>((header[4] << 8) | header[5]);
+	const uint16_t version = static_cast<uint16_t>((header[6] << 8) | header[7]);
+	const uint32_t file_size = (static_cast<uint32_t>(header[8]) << 24) |
+		(static_cast<uint32_t>(header[9]) << 16) |
+		(static_cast<uint32_t>(header[10]) << 8) |
 		header[11];
-	const u16 first_section = static_cast<u16>((header[12] << 8) | header[13]);
-	const u16 section_count = static_cast<u16>((header[14] << 8) | header[15]);
+	const uint16_t first_section = static_cast<uint16_t>((header[12] << 8) | header[13]);
+	const uint16_t section_count = static_cast<uint16_t>((header[14] << 8) | header[15]);
 
 	if ((magic != BINARY_MAGIC_FONT && magic != BINARY_MAGIC_FONT_ARCHIVE) ||
 		endian != 0xfeff || version != 0x0104 ||
@@ -165,7 +165,7 @@ bool Font::Load(std::istream& file)
 		return false;
 	}
 
-	std::vector<u8> data(file_size);
+	std::vector<uint8_t> data(file_size);
 	std::copy(header.begin(), header.end(), data.begin());
 	file.read(
 		reinterpret_cast<char*>(data.data() + header.size()),
@@ -174,19 +174,19 @@ bool Font::Load(std::istream& file)
 		return false;
 
 	archived = magic == BINARY_MAGIC_FONT_ARCHIVE;
-	u32 sheet_image_offset = 0;
-	u32 glyph_group_sheet_size = 0;
+	uint32_t sheet_image_offset = 0;
+	uint32_t glyph_group_sheet_size = 0;
 	bool found_font_information = false;
 	bool found_texture_glyph = false;
 
 	size_t section_offset = first_section;
-	for (u16 section_index = 0; section_index < section_count; ++section_index)
+	for (uint16_t section_index = 0; section_index < section_count; ++section_index)
 	{
 		if (!CanRead(data, section_offset, 8))
 			return false;
 
-		const u32 section_magic = ReadBE32(data, section_offset);
-		const u32 section_size = ReadBE32(data, section_offset + 4);
+		const uint32_t section_magic = ReadBE32(data, section_offset);
+		const uint32_t section_size = ReadBE32(data, section_offset + 4);
 		if (section_size < 8 || !CanRead(data, section_offset, section_size))
 			return false;
 
@@ -203,11 +203,11 @@ bool Font::Load(std::istream& file)
 		case BINARY_MAGIC_FONT_INFORMATION:
 			if (payload_size < 24)
 				return false;
-			line_feed = static_cast<s8>(data[payload + 1]);
+			line_feed = static_cast<int8_t>(data[payload + 1]);
 			alternate_char_index = ReadBE16(data, payload + 2);
-			default_width.left = static_cast<s8>(data[payload + 4]);
+			default_width.left = static_cast<int8_t>(data[payload + 4]);
 			default_width.glyph_width = data[payload + 5];
-			default_width.char_width = static_cast<s8>(data[payload + 6]);
+			default_width.char_width = static_cast<int8_t>(data[payload + 6]);
 			height = data[payload + 20];
 			width = data[payload + 21];
 			found_font_information = true;
@@ -262,8 +262,8 @@ bool Font::Load(std::istream& file)
 				return false;
 			}
 
-			if (!CanRead(data, map_offset, value_count * sizeof(u16)) ||
-				map_offset + value_count * sizeof(u16) > section_offset + section_size)
+			if (!CanRead(data, map_offset, value_count * sizeof(uint16_t)) ||
+				map_offset + value_count * sizeof(uint16_t) > section_offset + section_size)
 			{
 				return false;
 			}
@@ -301,9 +301,9 @@ bool Font::Load(std::istream& file)
 			{
 				const size_t offset = widths_offset + i * 3;
 				width_block.widths.push_back({
-					static_cast<s8>(data[offset]),
+					static_cast<int8_t>(data[offset]),
 					data[offset + 1],
-					static_cast<s8>(data[offset + 2])
+					static_cast<int8_t>(data[offset + 2])
 				});
 			}
 
@@ -330,15 +330,15 @@ bool Font::Load(std::istream& file)
 
 	sheet_data.reserve(sheet_count);
 	size_t sheet_offset = sheet_image_offset;
-	for (u16 sheet_index = 0; sheet_index < sheet_count; ++sheet_index)
+	for (uint16_t sheet_index = 0; sheet_index < sheet_count; ++sheet_index)
 	{
-		std::vector<u8> sheet;
+		std::vector<uint8_t> sheet;
 		if (archived)
 		{
 			if (!CanRead(data, sheet_offset, 4))
 				return false;
 
-			const u32 compressed_size = ReadBE32(data, sheet_offset);
+			const uint32_t compressed_size = ReadBE32(data, sheet_offset);
 			sheet_offset += 4;
 			if (!compressed_size || !CanRead(data, sheet_offset, compressed_size) ||
 				!DecompressHuffman8(
@@ -372,7 +372,7 @@ bool Font::Load(std::istream& file)
 			sheet_data[i].data(),
 			sheet_width,
 			sheet_height,
-			static_cast<u8>(sheet_format),
+			static_cast<uint8_t>(sheet_format),
 			0,
 			0,
 			0);
@@ -383,7 +383,7 @@ bool Font::Load(std::istream& file)
 	return true;
 }
 
-u16 Font::FindGlyphIndex(u16 character) const
+uint16_t Font::FindGlyphIndex(uint16_t character) const
 {
 	for (const CodeMap& code_map : code_maps)
 	{
@@ -394,25 +394,25 @@ u16 Font::FindGlyphIndex(u16 character) const
 		{
 		case 0:
 		{
-			const u16 index = static_cast<u16>(
+			const uint16_t index = static_cast<uint16_t>(
 				code_map.map_info[0] + character - code_map.ccode_begin);
-			if (index != std::numeric_limits<u16>::max())
+			if (index != std::numeric_limits<uint16_t>::max())
 				return index;
 			break;
 		}
 
 		case 1:
 		{
-			const u16 index = code_map.map_info[character - code_map.ccode_begin];
-			if (index != std::numeric_limits<u16>::max())
+			const uint16_t index = code_map.map_info[character - code_map.ccode_begin];
+			if (index != std::numeric_limits<uint16_t>::max())
 				return index;
 			break;
 		}
 
 		case 2:
 		{
-			const u16 count = code_map.map_info[0];
-			for (u16 i = 0; i < count; ++i)
+			const uint16_t count = code_map.map_info[0];
+			for (uint16_t i = 0; i < count; ++i)
 			{
 				const size_t offset = 1 + static_cast<size_t>(i) * 2;
 				if (code_map.map_info[offset] == character)
@@ -429,7 +429,7 @@ u16 Font::FindGlyphIndex(u16 character) const
 	return alternate_char_index;
 }
 
-Font::CharWidths Font::FindWidths(u16 glyph_index) const
+Font::CharWidths Font::FindWidths(uint16_t glyph_index) const
 {
 	for (const WidthBlock& width_block : width_blocks)
 	{
@@ -443,25 +443,25 @@ Font::CharWidths Font::FindWidths(u16 glyph_index) const
 	return default_width;
 }
 
-bool Font::GetGlyph(u16 character, Glyph& glyph) const
+bool Font::GetGlyph(uint16_t character, Glyph& glyph) const
 {
 	if (!loaded)
 		return false;
 
-	const u16 glyph_index = FindGlyphIndex(character);
-	const u32 cells_per_sheet = static_cast<u32>(sheet_row) * sheet_line;
+	const uint16_t glyph_index = FindGlyphIndex(character);
+	const uint32_t cells_per_sheet = static_cast<uint32_t>(sheet_row) * sheet_line;
 	if (!cells_per_sheet)
 		return false;
 
-	const u16 glyph_sheet = static_cast<u16>(glyph_index / cells_per_sheet);
+	const uint16_t glyph_sheet = static_cast<uint16_t>(glyph_index / cells_per_sheet);
 	if (glyph_sheet >= sheet_count)
 		return false;
 
-	const u32 glyph_cell = glyph_index % cells_per_sheet;
-	const u32 unit_x = glyph_cell % sheet_row;
-	const u32 unit_y = glyph_cell / sheet_row;
-	const u32 pixel_x = unit_x * (cell_width + 1);
-	const u32 pixel_y = unit_y * (cell_height + 1);
+	const uint32_t glyph_cell = glyph_index % cells_per_sheet;
+	const uint32_t unit_x = glyph_cell % sheet_row;
+	const uint32_t unit_y = glyph_cell / sheet_row;
+	const uint32_t pixel_x = unit_x * (cell_width + 1);
+	const uint32_t pixel_y = unit_y * (cell_height + 1);
 
 	glyph.widths = FindWidths(glyph_index);
 	glyph.sheet_index = glyph_sheet;
@@ -475,7 +475,7 @@ bool Font::GetGlyph(u16 character, Glyph& glyph) const
 	return true;
 }
 
-bool Font::Apply(u16 sheet_index) const
+bool Font::Apply(uint16_t sheet_index) const
 {
 	if (!loaded || sheet_index >= texture_objects.size())
 		return false;

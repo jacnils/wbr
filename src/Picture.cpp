@@ -21,7 +21,7 @@ misrepresented as being the original software.
 distribution.
 */
 
-#include "Picture.h"
+#include "../include/libwb/Picture.h"
 
 namespace WiiBanner
 {

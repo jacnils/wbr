@@ -28,10 +28,10 @@ distribution.
 // from dolphin
 #include "CommonTypes.h"
 
-#include "Sound.h"
-#include "LZ77.h"
-#include "Endian.h"
-#include "Types.h"
+#include "../include/libwb/Sound.h"
+#include "../include/libwb/LZ77.h"
+#include "../include/libwb/Endian.h"
+#include "../include/libwb/Types.h"
 
 namespace WiiBanner
 {
