@@ -302,10 +302,10 @@ int process(const Render& input_opening, Settings settings = {}) {
 		}};
 
 		std::array<Point, 4> points_icon = {{
-			{1146 * settings.resolution_multiplier, 0 * settings.resolution_multiplier}, // top left
-			{1146 * settings.resolution_multiplier, 594 * settings.resolution_multiplier}, // bottom left
+			{1060 * settings.resolution_multiplier, 0 * settings.resolution_multiplier}, // top left
+			{1060 * settings.resolution_multiplier, 520 * settings.resolution_multiplier}, // bottom left
 			{1833 * settings.resolution_multiplier, 0 * settings.resolution_multiplier}, // top right
-			{1833 * settings.resolution_multiplier, 594 * settings.resolution_multiplier} // bottom right
+			{1833 * settings.resolution_multiplier, 520 * settings.resolution_multiplier} // bottom right
 		}};
 
 		crop = "-vf \"";
