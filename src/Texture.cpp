@@ -147,8 +147,11 @@ Texture::~Texture()
 
 		file.seekg(file_start + texture_data_offset, std::ios::beg);
 
+		uint8_t mipmap = (max_lod > 0) ? 1 : 0;
+		uint8_t bias_clamp = (lod_bias > 0.0f) ? 1 : 0;
+
 		const uint32_t tex_size =
-			GX_GetTexBufferSize(width, height, format, true, max_lod);
+			GX_GetTexBufferSize(width, height, format, mipmap, max_lod);
 
 		img_ptr = new char[tex_size];
 
@@ -179,7 +182,7 @@ Texture::~Texture()
 				format,
 				wrap_s,
 				wrap_t,
-				true
+				mipmap
 			);
 
 
@@ -195,15 +198,32 @@ Texture::~Texture()
 				format,
 				wrap_s,
 				wrap_t,
-				true
+				mipmap
 			);
 		}
 
-		GX_InitTexObjFilterMode(
-			&texobj,
-			min_filter,
-			mag_filter
-		);
+		if (mipmap)
+		{
+			GX_InitTexObjLOD(
+				&texobj,
+				min_filter,
+				mag_filter,
+				min_lod,
+				max_lod,
+				lod_bias,
+				bias_clamp,
+				bias_clamp,
+				edge_lod
+			);
+		}
+		else
+		{
+			GX_InitTexObjFilterMode(
+				&texobj,
+				min_filter,
+				mag_filter
+			);
+		}
 	}
 }
 
