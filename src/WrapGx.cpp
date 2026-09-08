@@ -28,6 +28,7 @@ distribution.
 #include <GL/glew.h>
 //#include <GL/glu.h>
 
+#include <algorithm>
 #include <iostream>
 #include <map>
 #include <set>
@@ -98,6 +99,13 @@ struct GLTexObj
 	u8 wrap_s, wrap_t;
 	u8 minfilt, magfilt;
 
+	u8 mipmap = 0;
+	u8 max_lod = 0;
+	f32 min_lod = 0.0f;
+	f32 lod_bias = 0.0f;
+	u8 bias_clamp = 0;
+	u8 edge_lod = 0;
+
 	GLTexObj() : tex(0) {}
 
 	~GLTexObj()
@@ -120,91 +128,116 @@ struct GLTexObj
 			glGenTextures(1, &tex);
 			glBindTexture(GL_TEXTURE_2D, tex);
 
-			const u32 expanded_width  = RoundUp(wd, TexDecoder_GetBlockWidthInTexels(fmt));
-			const u32 expanded_height = RoundUp(ht, TexDecoder_GetBlockHeightInTexels(fmt));
-
-			GLenum gl_format, gl_iformat, gl_type = 0;
-
 			// copy palette data
 			const auto& tlut = g_tlut_names[tlut_name];
 			if (tlut.lut)
 				memcpy(texMem, tlut.lut, tlut.entries * 2);
 
-			// decode texture
-			auto const pcfmt = TexDecoder_Decode(g_texture_decode_buffer,
-				reinterpret_cast<u8*>(img_ptr), expanded_width, expanded_height, fmt, 0, tlut.fmt);
+			GLenum gl_format = 0, gl_iformat = 0, gl_type = 0;
 
-			// load texture
-			switch (pcfmt)
+			const u32 num_levels = mipmap ? (u32(max_lod) + 1) : 1;
+
+			u32 level_width = wd;
+			u32 level_height = ht;
+			const u8* level_src = reinterpret_cast<const u8*>(img_ptr);
+
+			for (u32 level = 0; level < num_levels; ++level)
 			{
-			default:
-			case PC_TEX_FMT_NONE:
-				std::cout << "Error decoding texture!!!\n";
+				const u32 expanded_width  = RoundUp(level_width, TexDecoder_GetBlockWidthInTexels(fmt));
+				const u32 expanded_height = RoundUp(level_height, TexDecoder_GetBlockHeightInTexels(fmt));
 
-			case PC_TEX_FMT_BGRA32:
-				gl_format = GL_BGRA;
-				gl_iformat = 4;
-				gl_type = GL_UNSIGNED_BYTE;
-				break;
+				// decode this level
+				auto const pcfmt = TexDecoder_Decode(g_texture_decode_buffer,
+					level_src, expanded_width, expanded_height, fmt, 0, tlut.fmt);
 
-			case PC_TEX_FMT_RGBA32:
-				gl_format = GL_RGBA;
-				gl_iformat = 4;
-				gl_type = GL_UNSIGNED_BYTE;
-				break;
+				switch (pcfmt)
+				{
+				default:
+				case PC_TEX_FMT_NONE:
+					std::cout << "Error decoding texture!!!\n";
 
-			case PC_TEX_FMT_I4_AS_I8:
-				gl_format = GL_LUMINANCE;
-				gl_iformat = GL_INTENSITY4;
-				gl_type = GL_UNSIGNED_BYTE;
-				break;
+				case PC_TEX_FMT_BGRA32:
+					gl_format = GL_BGRA;
+					gl_iformat = 4;
+					gl_type = GL_UNSIGNED_BYTE;
+					break;
 
-			case PC_TEX_FMT_IA4_AS_IA8:
-				gl_format = GL_LUMINANCE_ALPHA;
-				gl_iformat = GL_LUMINANCE4_ALPHA4;
-				gl_type = GL_UNSIGNED_BYTE;
-				break;
+				case PC_TEX_FMT_RGBA32:
+					gl_format = GL_RGBA;
+					gl_iformat = 4;
+					gl_type = GL_UNSIGNED_BYTE;
+					break;
 
-			case PC_TEX_FMT_I8:
-				gl_format = GL_LUMINANCE;
-				gl_iformat = GL_INTENSITY8;
-				gl_type = GL_UNSIGNED_BYTE;
-				break;
+				case PC_TEX_FMT_I4_AS_I8:
+					gl_format = GL_LUMINANCE;
+					gl_iformat = GL_INTENSITY4;
+					gl_type = GL_UNSIGNED_BYTE;
+					break;
 
-			case PC_TEX_FMT_IA8:
-				gl_format = GL_LUMINANCE_ALPHA;
-				gl_iformat = GL_LUMINANCE8_ALPHA8;
-				gl_type = GL_UNSIGNED_BYTE;
-				break;
+				case PC_TEX_FMT_IA4_AS_IA8:
+					gl_format = GL_LUMINANCE_ALPHA;
+					gl_iformat = GL_LUMINANCE4_ALPHA4;
+					gl_type = GL_UNSIGNED_BYTE;
+					break;
 
-			case PC_TEX_FMT_RGB565:
-				gl_format = GL_RGB;
-				gl_iformat = GL_RGB;
-				gl_type = GL_UNSIGNED_SHORT_5_6_5;
-				break;
+				case PC_TEX_FMT_I8:
+					gl_format = GL_LUMINANCE;
+					gl_iformat = GL_INTENSITY8;
+					gl_type = GL_UNSIGNED_BYTE;
+					break;
+
+				case PC_TEX_FMT_IA8:
+					gl_format = GL_LUMINANCE_ALPHA;
+					gl_iformat = GL_LUMINANCE8_ALPHA8;
+					gl_type = GL_UNSIGNED_BYTE;
+					break;
+
+				case PC_TEX_FMT_RGB565:
+					gl_format = GL_RGB;
+					gl_iformat = GL_RGB;
+					gl_type = GL_UNSIGNED_SHORT_5_6_5;
+					break;
+				}
+
+				if (expanded_width != level_width)
+					glPixelStorei(GL_UNPACK_ROW_LENGTH, expanded_width);
+
+				glTexImage2D(GL_TEXTURE_2D, level, gl_iformat, level_width, level_height, 0, gl_format, gl_type, g_texture_decode_buffer);
+
+				if (expanded_width != level_width)
+					glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+
+				level_src += TexDecoder_GetTextureSizeInBytes(expanded_width, expanded_height, fmt);
+				level_width  = std::max<u32>(1, level_width  >> 1);
+				level_height = std::max<u32>(1, level_height >> 1);
 			}
 
-			if (expanded_width != wd)
-				glPixelStorei(GL_UNPACK_ROW_LENGTH, expanded_width);
-
-			glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
-			glTexImage2D(GL_TEXTURE_2D, 0, gl_iformat, wd, ht, 0, gl_format, gl_type, g_texture_decode_buffer);
-			glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_FALSE);
-
-			if (expanded_width != wd)
-				glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, GLint(num_levels - 1));
 		}
 	}
 };
 
 std::set<GLTexObj> g_texture_cache;
 
-// TODO: doesn't handle mipmap or maxlod
 u32 	GX_GetTexBufferSize (u16 wd, u16 ht, u32 fmt, u8 mipmap, u8 maxlod)
 {
-	return TexDecoder_GetTextureSizeInBytes(
-		RoundUp(wd, TexDecoder_GetBlockWidthInTexels(fmt)),
-		RoundUp(ht, TexDecoder_GetBlockHeightInTexels(fmt)), fmt);
+	const u32 num_levels = mipmap ? (u32(maxlod) + 1) : 1;
+
+	u32 total = 0;
+	u32 level_w = wd;
+	u32 level_h = ht;
+
+	for (u32 level = 0; level < num_levels; ++level)
+	{
+		total += TexDecoder_GetTextureSizeInBytes(
+			RoundUp(level_w, TexDecoder_GetBlockWidthInTexels(fmt)),
+			RoundUp(level_h, TexDecoder_GetBlockHeightInTexels(fmt)), fmt);
+
+		level_w = std::max<u32>(1, level_w >> 1);
+		level_h = std::max<u32>(1, level_h >> 1);
+	}
+
+	return total;
 }
 
 void 	GX_InitTexObjTlut (GXTexObj *obj, u32 tlut_name)
@@ -240,6 +273,7 @@ void 	GX_InitTexObj (GXTexObj *obj, void *img_ptr, u16 wd, u16 ht, u8 fmt, u8 wr
 	txobj.fmt = fmt;
 	txobj.wrap_s = wrap_s;
 	txobj.wrap_t = wrap_t;
+	txobj.mipmap = mipmap;
 
 	// hax, invalidate cache entry
 	g_texture_cache.erase(txobj);
@@ -249,14 +283,8 @@ void 	GX_InitTexObj (GXTexObj *obj, void *img_ptr, u16 wd, u16 ht, u8 fmt, u8 wr
 	//glActiveTexture(GL_TEXTURE0);
 	//glBindTexture(GL_TEXTURE_2D, txobj.tex);
 
-	// texture lods
-	// TODO: not sure if correct
-	//glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_LOD, min_lod);
-	//glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_LOD, max_lod);
-
 	// TODO: ?
 	//edge_lod
-	//lod_bias
 	//wrap_s		// these 2 are handled by the materials values
 	//wrap_t
 
@@ -277,6 +305,19 @@ void 	GX_InitTexObjFilterMode (GXTexObj *obj, u8 minfilt, u8 magfilt)
 
 	txobj.minfilt = minfilt;
 	txobj.magfilt = magfilt;
+}
+
+void 	GX_InitTexObjLOD (GXTexObj *obj, u8 minfilt, u8 magfilt, f32 minlod, f32 maxlod, f32 lodbias, u8 biasclamp, u8 edgelod, u8 maxaniso)
+{
+	GLTexObj& txobj = *reinterpret_cast<GLTexObj*>(obj);
+
+	txobj.minfilt = minfilt;
+	txobj.magfilt = magfilt;
+	txobj.min_lod = minlod;
+	txobj.max_lod = u8(maxlod);
+	txobj.lod_bias = lodbias;
+	txobj.bias_clamp = biasclamp;
+	txobj.edge_lod = edgelod;
 }
 
 void 	GX_SetBlendMode (u8 type, u8 src_fact, u8 dst_fact, u8 op)
@@ -821,6 +862,16 @@ void 	GX_LoadTexObj (GXTexObj *obj, u8 mapid)
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filters[txobj.minfilt & 0x7]);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filters[txobj.magfilt & 0x7]);
+
+	if (txobj.mipmap) {
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_LOD, txobj.min_lod);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_LOD, float(txobj.max_lod));
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS, txobj.bias_clamp ? txobj.lod_bias : 0.0f);
+	} else {
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_LOD, -1000.0f);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_LOD, 1000.0f);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS, 0.0f);
+	}
 }
 
 inline void ActiveStage(u8 stage)
