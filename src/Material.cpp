@@ -1,5 +1,6 @@
 /*
 Copyright (c) 2010 - Wii Banner Player Project
+Copyright (c) 2026 - Jacob Nilsson
 
 This software is provided 'as-is', without any express or implied
 warranty. In no event will the authors be held liable for any damages
@@ -22,6 +23,8 @@ distribution.
 */
 
 #include <GL/glew.h>
+
+#include <cmath>
 
 #include <libwb/Material.h>
 #include <libwb/Endian.h>
@@ -176,15 +179,14 @@ void Material::Load(std::istream& file) {
 	// ind stage
 	for (uint32_t i = 0; i != flags.ind_stage; ++i)
 	{
-		// TODO: store these
-		uint8_t tex_coord, tex_map, scale_s, scale_t;
+		IndStage stage{};
 
-		file >> BE >> tex_coord >> tex_map >> scale_s, scale_t;
+		file >> BE >> stage.tex_coord >> stage.tex_map >> stage.scale_s >> stage.scale_t;
 
-		file.ignore(1);
+		ind_stages.push_back(stage);
 
-		std::cout << "ind_texture: " << name << "tex_coord: " << (int)tex_coord
-			<< " tex_map: " << (int)tex_map << '\n';
+		std::cout << "ind_texture: " << name << " tex_coord: " << (int)stage.tex_coord
+			<< " tex_map: " << (int)stage.tex_map << '\n';
 
 		std::cout << "Ind Stages not yet supported !!\n";
 	}
@@ -356,27 +358,33 @@ void Material::Apply(const Resources& resources) const
 	unsigned int i = 0;
 	for (auto& tcg : texture_coord_gens)
 	{
+		GX_SetTexCoordGen(GX_TEXCOORD0 + i, tcg.tgen_type, tcg.tgen_src, tcg.mtrx_src);
+
 		glActiveTexture(GL_TEXTURE0 + i);
 		glLoadIdentity();
 
-		// TODO: not using "tgen_type", "tgen_src"
-
-		const uint8_t mtrx = (tcg.mtrx_src - 30) / 3;
-
-		if (mtrx < texture_srts.size())
+		if (tcg.tgen_type == GX_TG_MTX2x4 && tcg.mtrx_src != GX_IDENTITY)
 		{
-			const auto& srt = texture_srts[mtrx];
+			const uint8_t mtrx = (tcg.mtrx_src - GX_TEXMTX0) / 3;
 
-			glTranslatef(0.5f, 0.5f, 0.f);
-			glRotatef(srt.rotate, 0.f, 0.f, 1.f);
+			if (mtrx < texture_srts.size())
+			{
+				const auto& srt = texture_srts[mtrx];
 
-			glScalef(srt.scale.x, srt.scale.y, 1.f);
+				glTranslatef(0.5f, 0.5f, 0.f);
+				glRotatef(srt.rotate, 0.f, 0.f, 1.f);
 
-			glTranslatef(srt.translate.x / srt.scale.x - 0.5f, srt.translate.y / srt.scale.y -0.5f, 0.f);
+				glScalef(srt.scale.x, srt.scale.y, 1.f);
+
+				glTranslatef(srt.translate.x / srt.scale.x - 0.5f, srt.translate.y / srt.scale.y -0.5f, 0.f);
+			}
 		}
 
 		++i;
 	}
+
+	GX_SetNumTexGens(i);
+
 	// TODO: is this needed?
 	for (; i != 8; ++i)
 	{
@@ -388,6 +396,87 @@ void Material::Apply(const Resources& resources) const
 
 	// bind textures
 	ApplyTextures(resources);
+
+	{
+	for (unsigned int i = 0; i != ind_srts.size() && i != MAX_IND_STAGES; ++i)
+	{
+		const auto& srt = ind_srts[i];
+
+		const float rotate_rad = srt.rotate * (3.14159265358979323846f / 180.0f);
+		const float cosF = std::cos(rotate_rad);
+		const float sinF = std::sin(rotate_rad);
+
+		float mtx23[2][3];
+		mtx23[0][0] = srt.scale_s * cosF;
+		mtx23[0][1] = srt.scale_t * -sinF;
+		mtx23[0][2] = srt.translate_s;
+
+		mtx23[1][0] = srt.scale_s * sinF;
+		mtx23[1][1] = srt.scale_t * cosF;
+		mtx23[1][2] = srt.translate_t;
+
+		float mtxabs23[2][3];
+		for (int n = 0; n < 2; ++n)
+			for (int m = 0; m < 3; ++m)
+				mtxabs23[n][m] = std::fabs(mtx23[n][m]);
+
+		int scale_exp = 0;
+
+		auto any_ge_one = [&]()
+		{
+			for (auto & n : mtxabs23)
+				for (float m : n)
+					if (m >= 1.0f)
+						return true;
+			return false;
+		};
+		auto all_lt_half = [&]()
+		{
+			for (auto & n : mtxabs23)
+				for (float m : n)
+					if (m >= 0.5f)
+						return false;
+			return true;
+		};
+
+		if (any_ge_one())
+		{
+			while (scale_exp < 0x2E && any_ge_one())
+			{
+				for (int n = 0; n < 2; ++n)
+					for (int m = 0; m < 3; ++m)
+					{
+						mtx23[n][m] *= 0.5f;
+						mtxabs23[n][m] *= 0.5f;
+					}
+				++scale_exp;
+			}
+		}
+		else if (all_lt_half())
+		{
+			while (scale_exp > -0x11 && all_lt_half())
+			{
+				for (int n = 0; n < 2; ++n)
+					for (int m = 0; m < 3; ++m)
+					{
+						mtx23[n][m] *= 2.0f;
+						mtxabs23[n][m] *= 2.0f;
+					}
+				--scale_exp;
+			}
+		}
+		GX_SetIndTexMatrix(GX_ITM_0 + i, mtx23, (int8_t)scale_exp);
+	}
+
+	for (unsigned int i = 0; i != ind_stages.size() && i != MAX_IND_STAGES; ++i)
+	{
+		const auto& stage = ind_stages[i];
+		GX_SetIndTexOrder(i, stage.tex_coord, stage.tex_map);
+		GX_SetIndTexCoordScale(i, stage.scale_s, stage.scale_t);
+	}
+
+	GX_SetNumIndStages((uint8_t)ind_stages.size());
+	}
 
 	// tev stages
 	{
@@ -448,14 +537,27 @@ void Material::ProcessHermiteKey(const KeyType& type, float value)
 		}
 		return;	// TODO: remove this return
 	}
-	else if (type.type == ANIMATION_TYPE_IND_MATERIAL)	// ind texture crap TODO REALLY FIX THIS SHIT
+	else if (type.type == ANIMATION_TYPE_IND_MATERIAL)	// indirect texture SRT
 	{
-		if (type.target < 5 && type.index < flags.ind_srt) //&& type.index < ind_srts.size())
+		if (type.target < 5 && type.index < ind_srts.size())
 		{
-			(&ind_srts[type.index].translate_s)[type.target] = value;
-			return;
+			auto& srt = ind_srts[type.index];
+
+			float* const values[] =
+			{
+				&srt.translate_s,
+				&srt.translate_t,
+
+				&srt.rotate,
+
+				&srt.scale_s,
+				&srt.scale_t,
+			};
+
+			*values[type.target] = value;
 		}
-		return;	// TODO: remove this return
+
+		return;
 	}
 	else if (type.type == ANIMATION_TYPE_MATERIAL_COLOR)	// material color
 	{
@@ -468,7 +570,7 @@ void Material::ProcessHermiteKey(const KeyType& type, float value)
 		else if (type.target < 0x10)
 		{
 			// initial color of tev color/output registers, often used for foreground/background
-			(&color_regs->r)[type.target - 4] = (uint16_t)value;
+			(&color_regs->r)[type.target - 4] = static_cast<uint16_t>(value);
 			return;
 		}
 		else if (type.target < 0x20)
