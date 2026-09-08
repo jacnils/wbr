@@ -29,9 +29,12 @@ distribution.
 //#include <GL/glu.h>
 
 #include <algorithm>
+#include <cmath>
+#include <cstring>
 #include <iostream>
 #include <map>
 #include <set>
+#include <string>
 #include <vector>
 #include <sstream>
 
@@ -48,8 +51,32 @@ static float g_color_registers[3][4];
 static float g_kcolor_registers[4][4];
 static u8 g_tev_swap_tables[4] = { 0xe4, 0xc0, 0xd5, 0xea };
 
+struct IndTexOrder
+{
+	u8 tex_coord = 0xFF;
+	u8 tex_map = 0xFF;
+};
+
+struct IndTexCoordScale
+{
+	u8 scale_s = GX_ITS_1;
+	u8 scale_t = GX_ITS_1;
+};
+
+struct IndTexMtx
+{
+	f32 m[2][3] = {};
+	s8 scale_exp = 0;
+	bool set = false;
+};
+
+static IndTexOrder g_ind_tex_order[4];
+static IndTexCoordScale g_ind_tex_coord_scale[4];
+static IndTexMtx g_ind_tex_mtx[12];
+static u8 g_num_ind_stages = 0;
+
 // TODO: make this 0, currently causes issues though, figure that out :p
-static const GLuint g_texmap_start_index = 1;
+static constexpr GLuint g_texmap_start_index = 1;
 
 //static GLuint g_clip_texture;
 
@@ -106,7 +133,9 @@ struct GLTexObj
 	u8 bias_clamp = 0;
 	u8 edge_lod = 0;
 
-	GLTexObj() : tex(0) {}
+	GLTexObj() : img_ptr(nullptr), tex(0), wd(0), ht(0), fmt(0), tlut_name(0), wrap_s(0), wrap_t(0), minfilt(0),
+	             magfilt(0) {
+	}
 
 	~GLTexObj()
 	{
@@ -442,6 +471,18 @@ struct TevStageProps
 
 	u8 texmap;
 
+	u8 ind_texid : 2;
+	u8 ind_format : 2;
+	u8 ind_bias : 3;
+	u8 ind_addprev : 1;
+
+	u8 ind_mtxid : 4;
+	u8 ind_alpha : 2;
+	u8 ind_pad : 2;
+
+	u8 ind_wrap_s;
+	u8 ind_wrap_t;
+
 	bool operator<(const TevStageProps& rhs) const
 	{
 		return memcmp(this, &rhs, sizeof(*this)) < 0;
@@ -449,6 +490,52 @@ struct TevStageProps
 };
 
 typedef std::vector<TevStageProps> TevStages;
+
+// one entry per active GX_TEXCOORDn slot, as set by GX_SetTexCoordGen
+struct TexGenProps
+{
+	u8 tgen_typ;
+	u8 tgen_src;
+	u8 mtxsrc;
+
+	bool operator<(const TexGenProps& rhs) const
+	{
+		return memcmp(this, &rhs, sizeof(*this)) < 0;
+	}
+};
+
+typedef std::vector<TexGenProps> TexGens;
+
+struct IndStageProps
+{
+	u8 tex_coord = 0xFF;
+	u8 tex_map = 0xFF;
+	u8 scale_s = GX_ITS_1;
+	u8 scale_t = GX_ITS_1;
+
+	bool operator<(const IndStageProps& rhs) const
+	{
+		return memcmp(this, &rhs, sizeof(*this)) < 0;
+	}
+};
+
+typedef std::vector<IndStageProps> IndStages;
+
+struct ShaderKey
+{
+	TevStages tev;
+	TexGens texgens;
+	IndStages ind_stages;
+
+	bool operator<(const ShaderKey& rhs) const
+	{
+		if (tev < rhs.tev) return true;
+		if (rhs.tev < tev) return false;
+		if (texgens < rhs.texgens) return true;
+		if (rhs.texgens < texgens) return false;
+		return ind_stages < rhs.ind_stages;
+	}
+};
 
 struct CompiledTevStages
 {
@@ -459,14 +546,15 @@ struct CompiledTevStages
 	{}
 
 	void Enable();
-	void Compile(const TevStages& stages);
+	void Compile(const TevStages& stages, const TexGens& texgens, const IndStages& ind_stages);
 
 	GLuint program, fragment_shader, vertex_shader;
 };
 
-std::map<TevStages, CompiledTevStages> g_compiled_tev_stages;
+std::map<ShaderKey, CompiledTevStages> g_compiled_tev_stages;
 
 TevStages g_active_stages;
+TexGens g_active_texgens;
 
 void CompiledTevStages::Enable()
 {
@@ -475,9 +563,37 @@ void CompiledTevStages::Enable()
 	// TODO: cache value of GetUniformLocation
 	glUniform4fv(glGetUniformLocation(program, "registers"), 3, g_color_registers[0]);
 	glUniform4fv(glGetUniformLocation(program, "kcolors"), 4, g_kcolor_registers[0]);
+
+	float row0[12 * 3];
+	float row1[12 * 3];
+	for (unsigned int i = 0; i != 12; ++i)
+	{
+		const IndTexMtx& m = g_ind_tex_mtx[i];
+		const float scale = m.set ? std::ldexp(1.0f, m.scale_exp) : 0.0f;
+
+		row0[i * 3 + 0] = m.m[0][0] * scale;
+		row0[i * 3 + 1] = m.m[0][1] * scale;
+		row0[i * 3 + 2] = m.m[0][2] * scale;
+
+		row1[i * 3 + 0] = m.m[1][0] * scale;
+		row1[i * 3 + 1] = m.m[1][1] * scale;
+		row1[i * 3 + 2] = m.m[1][2] * scale;
+	}
+	glUniform3fv(glGetUniformLocation(program, "ind_mtx_r0"), 12, row0);
+	glUniform3fv(glGetUniformLocation(program, "ind_mtx_r1"), 12, row1);
 }
 
-void CompiledTevStages::Compile(const TevStages& stages)
+static std::string GlslFloat(float v)
+{
+	std::ostringstream ss;
+	ss << v;
+	std::string s = ss.str();
+	if (s.find_first_of(".eEnN") == std::string::npos)
+		s += ".0";
+	return s;
+}
+
+void CompiledTevStages::Compile(const TevStages& stages, const TexGens& texgens, const IndStages& ind_stages)
 {
 	// w.e good for now
 	static const unsigned int sampler_count = 8;
@@ -492,13 +608,62 @@ void CompiledTevStages::Compile(const TevStages& stages)
 	vert_ss << "gl_BackColor = gl_Color;";
 
 	for (unsigned int i = 0; i != sampler_count; ++i)
-		vert_ss << "gl_TexCoord[" << i << "] = gl_TextureMatrix[" << i << "] * gl_MultiTexCoord" << i << ";";
+	{
+		if (i >= texgens.size())
+		{
+			vert_ss << "gl_TexCoord[" << i << "] = gl_TextureMatrix[" << i << "] * gl_MultiTexCoord" << i << ";";
+			continue;
+		}
+
+		const TexGenProps& tg = texgens[i];
+
+		std::string src_vec;
+
+		if (tg.tgen_src >= GX_TG_TEX0 && tg.tgen_src <= GX_TG_TEX7)
+		{
+			const unsigned int src_index = tg.tgen_src - GX_TG_TEX0;
+			src_vec = "vec4(gl_MultiTexCoord" + std::to_string(src_index) + ".st, 0.0, 1.0)";
+		}
+		else if (tg.tgen_src == GX_TG_POS)
+		{
+			src_vec = "vec4(gl_Vertex.xy, 0.0, 1.0)";
+		}
+		else
+		{
+			std::cout << "GX_SetTexCoordGen: unsupported tgen_src " << (int)tg.tgen_src
+				<< " on texcoord " << i << ", falling back to gl_MultiTexCoord" << i << "\n";
+			src_vec = "vec4(gl_MultiTexCoord" + std::to_string(i) + ".st, 0.0, 1.0)";
+		}
+
+		std::string mtx_expr;
+
+		if (tg.mtxsrc == GX_IDENTITY)
+		{
+			mtx_expr = "mat4(1.0)";
+		}
+		else if (tg.mtxsrc >= GX_TEXMTX0 && tg.mtxsrc <= GX_TEXMTX9 && (tg.mtxsrc - GX_TEXMTX0) % 3 == 0)
+		{
+			const unsigned int mtx_index = (tg.mtxsrc - GX_TEXMTX0) / 3;
+			mtx_expr = "gl_TextureMatrix[" + std::to_string(mtx_index) + "]";
+		}
+		else
+		{
+			std::cout << "GX_SetTexCoordGen: unrecognized mtxsrc " << (int)tg.mtxsrc
+				<< " on texcoord " << i << ", using identity\n";
+			mtx_expr = "mat4(1.0)";
+		}
+
+		if (tg.tgen_typ != GX_TG_MTX2x4 && tg.tgen_typ != GX_TG_MTX3x4)
+			std::cout << "GX_SetTexCoordGen: unsupported tgen_typ " << (int)tg.tgen_typ
+				<< " on texcoord " << i << ", treating as GX_TG_MTX2x4\n";
+
+		vert_ss << "gl_TexCoord[" << i << "] = " << mtx_expr << " * " << src_vec << ";";
+	}
 
 	vert_ss << "gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;";
 
 	vert_ss << '}';
 
-	// create/compile vertex shader
 	vertex_shader = glCreateShader(GL_VERTEX_SHADER);
 
 	{
@@ -513,6 +678,7 @@ void CompiledTevStages::Compile(const TevStages& stages)
 
 	// generate fragment shader code
 	std::ostringstream frag_ss;
+	frag_ss << "#extension GL_ARB_shader_texture_lod : enable\n";
 	{
 
 	// uniforms
@@ -520,6 +686,8 @@ void CompiledTevStages::Compile(const TevStages& stages)
 		frag_ss << "uniform sampler2D textures" << i << ';';
 	frag_ss << "uniform vec4 registers[3]" ";";
 	frag_ss << "uniform vec4 kcolors[4]" ";";
+	frag_ss << "uniform vec3 ind_mtx_r0[12]" ";";
+	frag_ss << "uniform vec3 ind_mtx_r1[12]" ";";
 
 	frag_ss << "void main(){";
 
@@ -527,6 +695,7 @@ void CompiledTevStages::Compile(const TevStages& stages)
 	frag_ss << "vec4 color_texture = vec4(0.0)" ";";
 	frag_ss << "vec4 color_constant = vec4(0.0)" ";";
 	frag_ss << "vec4 color_raster = vec4(0.0)" ";";
+	frag_ss << "vec2 ind_offset = vec2(0.0)" ";";
 	for (unsigned int i = 0; i != 3; ++i)
 		frag_ss << "vec4 color_registers" << i << " = registers[" << i << "]" ";";
 
@@ -574,12 +743,88 @@ void CompiledTevStages::Compile(const TevStages& stages)
 
 	for (auto& stage : stages)
 	{
+		const bool stage_has_ind = (stage.ind_mtxid >= GX_ITM_0 && stage.ind_mtxid <= GX_ITM_2)
+			&& (stage.ind_texid < ind_stages.size());
+
+		if (stage.ind_mtxid != GX_ITM_OFF && !stage_has_ind)
+		{
+			std::cout << "Material: unsupported indirect matrix id " << (int)stage.ind_mtxid
+				<< " (or indirect stage " << (int)stage.ind_texid << " not configured)"
+				<< ", disabling indirect for this stage\n";
+		}
+
+		if (stage_has_ind)
+		{
+			const IndStageProps& ind = ind_stages[stage.ind_texid];
+			const unsigned int mtx_index = stage.ind_mtxid;
+
+			frag_ss << '{';
+
+			frag_ss << "vec3 ind_tex = vec3(0.0);";
+			if (ind.tex_map < sampler_count && ind.tex_coord < sampler_count)
+			{
+				static const float scale_divisors[] = { 1, 2, 4, 8, 16, 32, 64, 128, 256 };
+				const float div_s = scale_divisors[ind.scale_s < 9 ? ind.scale_s : 0];
+				const float div_t = scale_divisors[ind.scale_t < 9 ? ind.scale_t : 0];
+
+				frag_ss << "ind_tex = texture2D(textures" << (int)ind.tex_map
+					<< ", gl_TexCoord[" << (int)ind.tex_coord << "].xy / vec2("
+					<< GlslFloat(div_s) << ',' << GlslFloat(div_t) << ")).rgb;";
+			}
+
+			static const float format_bases[] = { 256.0f, 32.0f, 16.0f, 8.0f };
+			const float base = format_bases[stage.ind_format];
+			const float bias_amount = base * 0.5f;
+
+			frag_ss << "vec3 ind_raw = mod(ind_tex * 255.0, " << GlslFloat(base) << ");";
+
+			if (stage.ind_bias & 1) frag_ss << "ind_raw.r -= " << GlslFloat(bias_amount) << ";";
+			if (stage.ind_bias & 2) frag_ss << "ind_raw.g -= " << GlslFloat(bias_amount) << ";";
+			if (stage.ind_bias & 4) frag_ss << "ind_raw.b -= " << GlslFloat(bias_amount) << ";";
+
+			frag_ss << "vec2 stage_ind_offset = vec2("
+				"dot(ind_mtx_r0[" << mtx_index << "], vec3(ind_raw.rg, 1.0)),"
+				"dot(ind_mtx_r1[" << mtx_index << "], vec3(ind_raw.rg, 1.0)));";
+
+			if (stage.ind_addprev)
+				frag_ss << "stage_ind_offset += ind_offset;";
+
+			frag_ss << "ind_offset = stage_ind_offset;";
+
+			if (stage.ind_wrap_s != GX_ITW_OFF || stage.ind_wrap_t != GX_ITW_OFF)
+			{
+				std::cout << "Material: indirect wrap modes (" << (int)stage.ind_wrap_s
+					<< ", " << (int)stage.ind_wrap_t << ") aren't emulated, ignoring\n";
+			}
+
+			if (stage.ind_alpha != GX_ITBA_OFF)
+			{
+				static const char* const bump_components[] = { "", "r", "g", "b" };
+				frag_ss << "color_raster.a = ind_tex." << bump_components[stage.ind_alpha] << ";";
+			}
+
+			frag_ss << '}';
+		}
+
 		// current texture color
 		// 0xff is a common value for a disabled texture
 		frag_ss << "color_texture = vec4(0.0);";
 		if (stage.texmap < sampler_count && stage.texcoord < sampler_count)
-			frag_ss << "color_texture = texture2D(textures" << (int)stage.texmap
-				<< ", gl_TexCoord[" << (int)stage.texcoord << "].xy);";
+		{
+			if (stage_has_ind)
+			{
+				frag_ss << "{"
+					"vec2 base_coord = gl_TexCoord[" << (int)stage.texcoord << "].xy;"
+					"color_texture = texture2DGradARB(textures" << (int)stage.texmap
+					<< ", base_coord + ind_offset, dFdx(base_coord), dFdy(base_coord));"
+					"}";
+			}
+			else
+			{
+				frag_ss << "color_texture = texture2D(textures" << (int)stage.texmap
+					<< ", gl_TexCoord[" << (int)stage.texcoord << "].xy);";
+			}
+		}
 
 		static const char components[] = { 'r', 'g', 'b', 'a' };
 		auto const write_swizzle = [&](u8 swap)
@@ -909,6 +1154,52 @@ void 	GX_SetTevIndirect (u8 tevstage, u8 indtexid, u8 format, u8 bias, u8 mtxid,
 	u8 wrap_s, u8 wrap_t, u8 addprev, u8 utclod, u8 a)
 {
 	ActiveStage(tevstage);
+
+	TevStageProps& ts = g_active_stages[tevstage];
+	ts.ind_texid = indtexid & 0x3;
+	ts.ind_format = format & 0x3;
+	ts.ind_bias = bias & 0x7;
+	ts.ind_mtxid = mtxid & 0xF;
+	ts.ind_wrap_s = wrap_s;
+	ts.ind_wrap_t = wrap_t;
+	ts.ind_addprev = addprev ? 1 : 0;
+	ts.ind_alpha = a & 0x3;
+
+	(void)utclod;
+}
+
+void 	GX_SetIndTexOrder (u8 ind_stage, u8 tex_coord, u8 tex_map)
+{
+	if (ind_stage < 4)
+	{
+		g_ind_tex_order[ind_stage].tex_coord = tex_coord;
+		g_ind_tex_order[ind_stage].tex_map = tex_map;
+	}
+}
+
+void 	GX_SetIndTexCoordScale (u8 ind_stage, u8 scale_s, u8 scale_t)
+{
+	if (ind_stage < 4)
+	{
+		g_ind_tex_coord_scale[ind_stage].scale_s = scale_s;
+		g_ind_tex_coord_scale[ind_stage].scale_t = scale_t;
+	}
+}
+
+void 	GX_SetIndTexMatrix (u8 mtx_ind, Mtx23 offset_mtx, s8 scale_exp)
+{
+	if (mtx_ind < 12)
+	{
+		IndTexMtx& m = g_ind_tex_mtx[mtx_ind];
+		memcpy(m.m, offset_mtx, sizeof(m.m));
+		m.scale_exp = scale_exp;
+		m.set = true;
+	}
+}
+
+void 	GX_SetNumIndStages (u8 num_stages)
+{
+	g_num_ind_stages = num_stages;
 }
 
 void 	GX_SetTevColorS10 (u8 tev_regid, GXColorS10 color)
@@ -985,14 +1276,43 @@ void 	GX_SetTevColorOp (u8 tevstage, u8 tevop, u8 tevbias, u8 tevscale, u8 clamp
 	ts.color_clamp = clamp;
 }
 
+void 	GX_SetTexCoordGen (u8 texcoord, u8 tgen_typ, u8 tgen_src, u8 mtxsrc)
+{
+	if (texcoord >= g_active_texgens.size())
+		g_active_texgens.resize(texcoord + 1);
+
+	TexGenProps& tg = g_active_texgens[texcoord];
+	tg.tgen_typ = tgen_typ;
+	tg.tgen_src = tgen_src;
+	tg.mtxsrc = mtxsrc;
+}
+
+void 	GX_SetNumTexGens (u8 num)
+{
+	g_active_texgens.resize(num);
+}
+
 void 	GX_SetNumTevStages (u8 num)
 {
 	g_active_stages.resize(num);
-	CompiledTevStages& comptevs = g_compiled_tev_stages[g_active_stages];
+
+	IndStages ind_stages;
+	for (unsigned int i = 0; i != g_num_ind_stages && i != 4; ++i)
+	{
+		IndStageProps isp;
+		isp.tex_coord = g_ind_tex_order[i].tex_coord;
+		isp.tex_map = g_ind_tex_order[i].tex_map;
+		isp.scale_s = g_ind_tex_coord_scale[i].scale_s;
+		isp.scale_t = g_ind_tex_coord_scale[i].scale_t;
+		ind_stages.push_back(isp);
+	}
+
+	const ShaderKey key{ g_active_stages, g_active_texgens, ind_stages };
+	CompiledTevStages& comptevs = g_compiled_tev_stages[key];
 
 	// compile program if needed
 	if (!comptevs.program)
-		comptevs.Compile(g_active_stages);
+		comptevs.Compile(g_active_stages, g_active_texgens, ind_stages);
 
 	// enable the program
 	comptevs.Enable();
