@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <vector>
 #include <string>
-#include <GL/glew.h>
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
 #include <windows.h>
 #endif
@@ -41,9 +40,9 @@ private:
     void CreateFramebuffer();
     void DestroyFramebuffer();
 
-    GLuint m_framebuffer = 0;
-    GLuint m_depth_buffer = 0;
-    GLuint m_color_texture = 0;
+    uint32_t m_framebuffer = 0;
+    uint32_t m_depth_buffer = 0;
+    uint32_t m_color_texture = 0;
 #endif
 
     int m_width;

@@ -32,6 +32,41 @@ distribution.
 #define 	GX_TEVREG1   2
 #define 	GX_TEVREG2   3
 
+#define		GX_TG_MTX3x4	0
+#define		GX_TG_MTX2x4	1
+#define		GX_TG_BUMP0		2
+#define		GX_TG_BUMP7		9
+#define		GX_TG_SRTG		10
+
+#define		GX_TG_POS		0
+#define		GX_TG_NRM		1
+#define		GX_TG_BINRM		2
+#define		GX_TG_TANGENT	3
+#define		GX_TG_TEX0		4
+#define		GX_TG_TEX1		5
+#define		GX_TG_TEX2		6
+#define		GX_TG_TEX3		7
+#define		GX_TG_TEX4		8
+#define		GX_TG_TEX5		9
+#define		GX_TG_TEX6		10
+#define		GX_TG_TEX7		11
+#define		GX_TG_COLOR0	21
+#define		GX_TG_COLOR1	22
+
+#define		GX_TEXMTX0		30
+#define		GX_TEXMTX1		33
+#define		GX_TEXMTX2		36
+#define		GX_TEXMTX3		39
+#define		GX_TEXMTX4		42
+#define		GX_TEXMTX5		45
+#define		GX_TEXMTX6		48
+#define		GX_TEXMTX7		51
+#define		GX_TEXMTX8		54
+#define		GX_TEXMTX9		57
+#define		GX_IDENTITY		60
+
+#define		GX_TEXCOORD0	0
+
 typedef float f32;
 
 // watev
@@ -107,5 +142,8 @@ void 	GX_SetTevColorS10 (uint8_t tev_regid, GXColorS10 color);
 void 	GX_SetTevKColor (uint8_t tev_regid, GXColor color);
 
 void 	GX_SetNumTevStages (uint8_t num);
+
+void 	GX_SetTexCoordGen (uint8_t texcoord, uint8_t tgen_typ, uint8_t tgen_src, uint8_t mtxsrc);
+void 	GX_SetNumTexGens (uint8_t num);
 
 #endif

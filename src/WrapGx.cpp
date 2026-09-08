@@ -32,6 +32,7 @@ distribution.
 #include <iostream>
 #include <map>
 #include <set>
+#include <string>
 #include <vector>
 #include <sstream>
 
@@ -49,7 +50,7 @@ static float g_kcolor_registers[4][4];
 static u8 g_tev_swap_tables[4] = { 0xe4, 0xc0, 0xd5, 0xea };
 
 // TODO: make this 0, currently causes issues though, figure that out :p
-static const GLuint g_texmap_start_index = 1;
+static constexpr GLuint g_texmap_start_index = 0;
 
 //static GLuint g_clip_texture;
 
@@ -106,7 +107,9 @@ struct GLTexObj
 	u8 bias_clamp = 0;
 	u8 edge_lod = 0;
 
-	GLTexObj() : tex(0) {}
+	GLTexObj() : img_ptr(nullptr), tex(0), wd(0), ht(0), fmt(0), tlut_name(0), wrap_s(0), wrap_t(0), minfilt(0),
+	             magfilt(0) {
+	}
 
 	~GLTexObj()
 	{
@@ -450,6 +453,38 @@ struct TevStageProps
 
 typedef std::vector<TevStageProps> TevStages;
 
+// one entry per active GX_TEXCOORDn slot, as set by GX_SetTexCoordGen
+struct TexGenProps
+{
+	u8 tgen_typ;
+	u8 tgen_src;
+	u8 mtxsrc;
+
+	bool operator<(const TexGenProps& rhs) const
+	{
+		return memcmp(this, &rhs, sizeof(*this)) < 0;
+	}
+};
+
+typedef std::vector<TexGenProps> TexGens;
+
+// the generated vertex shader depends on the texgen setup just as much as
+// the fragment shader depends on the tev stages, so both must be part of
+// the cache key -- two materials with identical tev stages but different
+// tgen_src/mtxsrc need different vertex shaders.
+struct ShaderKey
+{
+	TevStages tev;
+	TexGens texgens;
+
+	bool operator<(const ShaderKey& rhs) const
+	{
+		if (tev < rhs.tev) return true;
+		if (rhs.tev < tev) return false;
+		return texgens < rhs.texgens;
+	}
+};
+
 struct CompiledTevStages
 {
 	CompiledTevStages()
@@ -459,14 +494,15 @@ struct CompiledTevStages
 	{}
 
 	void Enable();
-	void Compile(const TevStages& stages);
+	void Compile(const TevStages& stages, const TexGens& texgens);
 
 	GLuint program, fragment_shader, vertex_shader;
 };
 
-std::map<TevStages, CompiledTevStages> g_compiled_tev_stages;
+std::map<ShaderKey, CompiledTevStages> g_compiled_tev_stages;
 
 TevStages g_active_stages;
+TexGens g_active_texgens;
 
 void CompiledTevStages::Enable()
 {
@@ -477,7 +513,7 @@ void CompiledTevStages::Enable()
 	glUniform4fv(glGetUniformLocation(program, "kcolors"), 4, g_kcolor_registers[0]);
 }
 
-void CompiledTevStages::Compile(const TevStages& stages)
+void CompiledTevStages::Compile(const TevStages& stages, const TexGens& texgens)
 {
 	// w.e good for now
 	static const unsigned int sampler_count = 8;
@@ -492,13 +528,62 @@ void CompiledTevStages::Compile(const TevStages& stages)
 	vert_ss << "gl_BackColor = gl_Color;";
 
 	for (unsigned int i = 0; i != sampler_count; ++i)
-		vert_ss << "gl_TexCoord[" << i << "] = gl_TextureMatrix[" << i << "] * gl_MultiTexCoord" << i << ";";
+	{
+		if (i >= texgens.size())
+		{
+			vert_ss << "gl_TexCoord[" << i << "] = gl_TextureMatrix[" << i << "] * gl_MultiTexCoord" << i << ";";
+			continue;
+		}
+
+		const TexGenProps& tg = texgens[i];
+
+		std::string src_vec;
+
+		if (tg.tgen_src >= GX_TG_TEX0 && tg.tgen_src <= GX_TG_TEX7)
+		{
+			const unsigned int src_index = tg.tgen_src - GX_TG_TEX0;
+			src_vec = "vec4(gl_MultiTexCoord" + std::to_string(src_index) + ".st, 0.0, 1.0)";
+		}
+		else if (tg.tgen_src == GX_TG_POS)
+		{
+			src_vec = "vec4(gl_Vertex.xy, 0.0, 1.0)";
+		}
+		else
+		{
+			std::cout << "GX_SetTexCoordGen: unsupported tgen_src " << (int)tg.tgen_src
+				<< " on texcoord " << i << ", falling back to gl_MultiTexCoord" << i << "\n";
+			src_vec = "vec4(gl_MultiTexCoord" + std::to_string(i) + ".st, 0.0, 1.0)";
+		}
+
+		std::string mtx_expr;
+
+		if (tg.mtxsrc == GX_IDENTITY)
+		{
+			mtx_expr = "mat4(1.0)";
+		}
+		else if (tg.mtxsrc >= GX_TEXMTX0 && tg.mtxsrc <= GX_TEXMTX9 && (tg.mtxsrc - GX_TEXMTX0) % 3 == 0)
+		{
+			const unsigned int mtx_index = (tg.mtxsrc - GX_TEXMTX0) / 3;
+			mtx_expr = "gl_TextureMatrix[" + std::to_string(mtx_index) + "]";
+		}
+		else
+		{
+			std::cout << "GX_SetTexCoordGen: unrecognized mtxsrc " << (int)tg.mtxsrc
+				<< " on texcoord " << i << ", using identity\n";
+			mtx_expr = "mat4(1.0)";
+		}
+
+		if (tg.tgen_typ != GX_TG_MTX2x4 && tg.tgen_typ != GX_TG_MTX3x4)
+			std::cout << "GX_SetTexCoordGen: unsupported tgen_typ " << (int)tg.tgen_typ
+				<< " on texcoord " << i << ", treating as GX_TG_MTX2x4\n";
+
+		vert_ss << "gl_TexCoord[" << i << "] = " << mtx_expr << " * " << src_vec << ";";
+	}
 
 	vert_ss << "gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;";
 
 	vert_ss << '}';
 
-	// create/compile vertex shader
 	vertex_shader = glCreateShader(GL_VERTEX_SHADER);
 
 	{
@@ -985,14 +1070,32 @@ void 	GX_SetTevColorOp (u8 tevstage, u8 tevop, u8 tevbias, u8 tevscale, u8 clamp
 	ts.color_clamp = clamp;
 }
 
+void 	GX_SetTexCoordGen (u8 texcoord, u8 tgen_typ, u8 tgen_src, u8 mtxsrc)
+{
+	if (texcoord >= g_active_texgens.size())
+		g_active_texgens.resize(texcoord + 1);
+
+	TexGenProps& tg = g_active_texgens[texcoord];
+	tg.tgen_typ = tgen_typ;
+	tg.tgen_src = tgen_src;
+	tg.mtxsrc = mtxsrc;
+}
+
+void 	GX_SetNumTexGens (u8 num)
+{
+	g_active_texgens.resize(num);
+}
+
 void 	GX_SetNumTevStages (u8 num)
 {
 	g_active_stages.resize(num);
-	CompiledTevStages& comptevs = g_compiled_tev_stages[g_active_stages];
+
+	const ShaderKey key{ g_active_stages, g_active_texgens };
+	CompiledTevStages& comptevs = g_compiled_tev_stages[key];
 
 	// compile program if needed
 	if (!comptevs.program)
-		comptevs.Compile(g_active_stages);
+		comptevs.Compile(g_active_stages, g_active_texgens);
 
 	// enable the program
 	comptevs.Enable();

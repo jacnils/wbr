@@ -176,15 +176,21 @@ void Material::Load(std::istream& file) {
 	// ind stage
 	for (uint32_t i = 0; i != flags.ind_stage; ++i)
 	{
-		// TODO: store these
-		uint8_t tex_coord, tex_map, scale_s, scale_t;
+		IndStage stage{};
 
-		file >> BE >> tex_coord >> tex_map >> scale_s, scale_t;
+		// NOTE: the previous version of this loop read this as
+		// `>> scale_s, scale_t;` -- the comma operator meant scale_t was
+		// never actually extracted from the stream (left uninitialized)
+		// and was never stored anywhere at all. The 4-byte IndStage
+		// struct has no padding, so the total bytes consumed happened to
+		// still line up (this didn't desync later fields), but the data
+		// itself was silently thrown away.
+		file >> BE >> stage.tex_coord >> stage.tex_map >> stage.scale_s >> stage.scale_t;
 
-		file.ignore(1);
+		ind_stages.push_back(stage);
 
-		std::cout << "ind_texture: " << name << "tex_coord: " << (int)tex_coord
-			<< " tex_map: " << (int)tex_map << '\n';
+		std::cout << "ind_texture: " << name << " tex_coord: " << (int)stage.tex_coord
+			<< " tex_map: " << (int)stage.tex_map << '\n';
 
 		std::cout << "Ind Stages not yet supported !!\n";
 	}
@@ -356,27 +362,43 @@ void Material::Apply(const Resources& resources) const
 	unsigned int i = 0;
 	for (auto& tcg : texture_coord_gens)
 	{
+		// tell the shim which raw attribute (tgen_src) and which texture
+		// matrix slot (mtrx_src) feed GX_TEXCOORDn -- the fragment/vertex
+		// shaders generated in WrapGx.cpp now honor this instead of
+		// assuming a 1:1 mapping to the loop index.
+		GX_SetTexCoordGen(GX_TEXCOORD0 + i, tcg.tgen_type, tcg.tgen_src, tcg.mtrx_src);
+
 		glActiveTexture(GL_TEXTURE0 + i);
 		glLoadIdentity();
 
-		// TODO: not using "tgen_type", "tgen_src"
-
-		const uint8_t mtrx = (tcg.mtrx_src - 30) / 3;
-
-		if (mtrx < texture_srts.size())
+		// GX_IDENTITY (60) means "no texture matrix" and must be excluded
+		// explicitly -- (60-30)/3 == 10 happens to be out of range for
+		// most materials (which have only a couple of texture_srts), but
+		// any material with 11+ srts would otherwise pick up a bogus one.
+		// Likewise, only GX_TG_MTX2x4 tex-gens are meant to pull from
+		// texture_srts at all.
+		if (tcg.tgen_type == GX_TG_MTX2x4 && tcg.mtrx_src != GX_IDENTITY)
 		{
-			const auto& srt = texture_srts[mtrx];
+			const uint8_t mtrx = (tcg.mtrx_src - GX_TEXMTX0) / 3;
 
-			glTranslatef(0.5f, 0.5f, 0.f);
-			glRotatef(srt.rotate, 0.f, 0.f, 1.f);
+			if (mtrx < texture_srts.size())
+			{
+				const auto& srt = texture_srts[mtrx];
 
-			glScalef(srt.scale.x, srt.scale.y, 1.f);
+				glTranslatef(0.5f, 0.5f, 0.f);
+				glRotatef(srt.rotate, 0.f, 0.f, 1.f);
 
-			glTranslatef(srt.translate.x / srt.scale.x - 0.5f, srt.translate.y / srt.scale.y -0.5f, 0.f);
+				glScalef(srt.scale.x, srt.scale.y, 1.f);
+
+				glTranslatef(srt.translate.x / srt.scale.x - 0.5f, srt.translate.y / srt.scale.y -0.5f, 0.f);
+			}
 		}
 
 		++i;
 	}
+
+	GX_SetNumTexGens(i);
+
 	// TODO: is this needed?
 	for (; i != 8; ++i)
 	{

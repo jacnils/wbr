@@ -146,6 +146,12 @@ private:
 
 	std::vector<IndSrt> ind_srts;
 
+	struct IndStage {
+		uint8_t tex_coord, tex_map, scale_s, scale_t;
+	};
+
+	std::vector<IndStage> ind_stages;
+
 	union TevStage
 	{
 		char data[0x10];
