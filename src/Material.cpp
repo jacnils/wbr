@@ -23,6 +23,8 @@ distribution.
 
 #include <GL/glew.h>
 
+#include <cmath>
+
 #include <libwb/Material.h>
 #include <libwb/Endian.h>
 #include <libwb/Funcs.h>
@@ -362,21 +364,11 @@ void Material::Apply(const Resources& resources) const
 	unsigned int i = 0;
 	for (auto& tcg : texture_coord_gens)
 	{
-		// tell the shim which raw attribute (tgen_src) and which texture
-		// matrix slot (mtrx_src) feed GX_TEXCOORDn -- the fragment/vertex
-		// shaders generated in WrapGx.cpp now honor this instead of
-		// assuming a 1:1 mapping to the loop index.
 		GX_SetTexCoordGen(GX_TEXCOORD0 + i, tcg.tgen_type, tcg.tgen_src, tcg.mtrx_src);
 
 		glActiveTexture(GL_TEXTURE0 + i);
 		glLoadIdentity();
 
-		// GX_IDENTITY (60) means "no texture matrix" and must be excluded
-		// explicitly -- (60-30)/3 == 10 happens to be out of range for
-		// most materials (which have only a couple of texture_srts), but
-		// any material with 11+ srts would otherwise pick up a bogus one.
-		// Likewise, only GX_TG_MTX2x4 tex-gens are meant to pull from
-		// texture_srts at all.
 		if (tcg.tgen_type == GX_TG_MTX2x4 && tcg.mtrx_src != GX_IDENTITY)
 		{
 			const uint8_t mtrx = (tcg.mtrx_src - GX_TEXMTX0) / 3;
@@ -410,6 +402,88 @@ void Material::Apply(const Resources& resources) const
 
 	// bind textures
 	ApplyTextures(resources);
+
+	{
+	for (unsigned int i = 0; i != ind_srts.size() && i != MAX_IND_STAGES; ++i)
+	{
+		const auto& srt = ind_srts[i];
+
+		const float rotate_rad = srt.rotate * (3.14159265358979323846f / 180.0f);
+		const float cosF = std::cos(rotate_rad);
+		const float sinF = std::sin(rotate_rad);
+
+		float mtx23[2][3];
+		mtx23[0][0] = srt.scale_s * cosF;
+		mtx23[0][1] = srt.scale_t * -sinF;
+		mtx23[0][2] = srt.translate_s;
+
+		mtx23[1][0] = srt.scale_s * sinF;
+		mtx23[1][1] = srt.scale_t * cosF;
+		mtx23[1][2] = srt.translate_t;
+
+		float mtxabs23[2][3];
+		for (int n = 0; n < 2; ++n)
+			for (int m = 0; m < 3; ++m)
+				mtxabs23[n][m] = std::fabs(mtx23[n][m]);
+
+		int scale_exp = 0;
+
+		auto any_ge_one = [&]()
+		{
+			for (int n = 0; n < 2; ++n)
+				for (int m = 0; m < 3; ++m)
+					if (mtxabs23[n][m] >= 1.0f)
+						return true;
+			return false;
+		};
+		auto all_lt_half = [&]()
+		{
+			for (int n = 0; n < 2; ++n)
+				for (int m = 0; m < 3; ++m)
+					if (mtxabs23[n][m] >= 0.5f)
+						return false;
+			return true;
+		};
+
+		if (any_ge_one())
+		{
+			while (scale_exp < 0x2E && any_ge_one())
+			{
+				for (int n = 0; n < 2; ++n)
+					for (int m = 0; m < 3; ++m)
+					{
+						mtx23[n][m] *= 0.5f;
+						mtxabs23[n][m] *= 0.5f;
+					}
+				++scale_exp;
+			}
+		}
+		else if (all_lt_half())
+		{
+			while (scale_exp > -0x11 && all_lt_half())
+			{
+				for (int n = 0; n < 2; ++n)
+					for (int m = 0; m < 3; ++m)
+					{
+						mtx23[n][m] *= 2.0f;
+						mtxabs23[n][m] *= 2.0f;
+					}
+				--scale_exp;
+			}
+		}
+
+		GX_SetIndTexMatrix(GX_ITM_0 + i, mtx23, (int8_t)scale_exp);
+	}
+
+	for (unsigned int i = 0; i != ind_stages.size() && i != MAX_IND_STAGES; ++i)
+	{
+		const auto& stage = ind_stages[i];
+		GX_SetIndTexOrder(i, stage.tex_coord, stage.tex_map);
+		GX_SetIndTexCoordScale(i, stage.scale_s, stage.scale_t);
+	}
+
+	GX_SetNumIndStages((uint8_t)ind_stages.size());
+	}
 
 	// tev stages
 	{
@@ -470,14 +544,27 @@ void Material::ProcessHermiteKey(const KeyType& type, float value)
 		}
 		return;	// TODO: remove this return
 	}
-	else if (type.type == ANIMATION_TYPE_IND_MATERIAL)	// ind texture crap TODO REALLY FIX THIS SHIT
+	else if (type.type == ANIMATION_TYPE_IND_MATERIAL)	// indirect texture SRT
 	{
-		if (type.target < 5 && type.index < flags.ind_srt) //&& type.index < ind_srts.size())
+		if (type.target < 5 && type.index < ind_srts.size())
 		{
-			(&ind_srts[type.index].translate_s)[type.target] = value;
-			return;
+			auto& srt = ind_srts[type.index];
+
+			float* const values[] =
+			{
+				&srt.translate_s,
+				&srt.translate_t,
+
+				&srt.rotate,
+
+				&srt.scale_s,
+				&srt.scale_t,
+			};
+
+			*values[type.target] = value;
 		}
-		return;	// TODO: remove this return
+
+		return;
 	}
 	else if (type.type == ANIMATION_TYPE_MATERIAL_COLOR)	// material color
 	{

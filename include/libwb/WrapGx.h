@@ -146,4 +146,59 @@ void 	GX_SetNumTevStages (uint8_t num);
 void 	GX_SetTexCoordGen (uint8_t texcoord, uint8_t tgen_typ, uint8_t tgen_src, uint8_t mtxsrc);
 void 	GX_SetNumTexGens (uint8_t num);
 
+typedef f32 Mtx23[2][3];
+
+#define 	GX_ITM_OFF		0
+#define 	GX_ITM_0		1
+#define 	GX_ITM_1		2
+#define 	GX_ITM_2		3
+#define 	GX_ITM_S0		5
+#define 	GX_ITM_S1		6
+#define 	GX_ITM_S2		7
+#define 	GX_ITM_T0		9
+#define 	GX_ITM_T1		10
+#define 	GX_ITM_T2		11
+
+#define 	GX_ITF_8		0
+#define 	GX_ITF_5		1
+#define 	GX_ITF_4		2
+#define 	GX_ITF_3		3
+
+#define 	GX_ITB_NONE		0
+#define 	GX_ITB_S		1
+#define 	GX_ITB_T		2
+#define 	GX_ITB_ST		3
+#define 	GX_ITB_U		4
+#define 	GX_ITB_SU		5
+#define 	GX_ITB_TU		6
+#define 	GX_ITB_STU		7
+
+#define 	GX_ITBA_OFF		0
+#define 	GX_ITBA_S		1
+#define 	GX_ITBA_T		2
+#define 	GX_ITBA_U		3
+
+#define 	GX_ITW_OFF		0
+#define 	GX_ITW_256		1
+#define 	GX_ITW_128		2
+#define 	GX_ITW_64		3
+#define 	GX_ITW_32		4
+#define 	GX_ITW_16		5
+#define 	GX_ITW_0		6
+
+#define 	GX_ITS_1		0
+#define 	GX_ITS_2		1
+#define 	GX_ITS_4		2
+#define 	GX_ITS_8		3
+#define 	GX_ITS_16		4
+#define 	GX_ITS_32		5
+#define 	GX_ITS_64		6
+#define 	GX_ITS_128		7
+#define 	GX_ITS_256		8
+
+void 	GX_SetIndTexOrder (uint8_t ind_stage, uint8_t tex_coord, uint8_t tex_map);
+void 	GX_SetIndTexCoordScale (uint8_t ind_stage, uint8_t scale_s, uint8_t scale_t);
+void 	GX_SetIndTexMatrix (uint8_t mtx_ind, Mtx23 offset_mtx, int8_t scale_exp);
+void 	GX_SetNumIndStages (uint8_t num_stages);
+
 #endif
