@@ -430,17 +430,17 @@ void Material::Apply(const Resources& resources) const
 
 		auto any_ge_one = [&]()
 		{
-			for (int n = 0; n < 2; ++n)
-				for (int m = 0; m < 3; ++m)
-					if (mtxabs23[n][m] >= 1.0f)
+			for (auto & n : mtxabs23)
+				for (float m : n)
+					if (m >= 1.0f)
 						return true;
 			return false;
 		};
 		auto all_lt_half = [&]()
 		{
-			for (int n = 0; n < 2; ++n)
-				for (int m = 0; m < 3; ++m)
-					if (mtxabs23[n][m] >= 0.5f)
+			for (auto & n : mtxabs23)
+				for (float m : n)
+					if (m >= 0.5f)
 						return false;
 			return true;
 		};
@@ -471,7 +471,6 @@ void Material::Apply(const Resources& resources) const
 				--scale_exp;
 			}
 		}
-
 		GX_SetIndTexMatrix(GX_ITM_0 + i, mtx23, (int8_t)scale_exp);
 	}
 
@@ -577,7 +576,7 @@ void Material::ProcessHermiteKey(const KeyType& type, float value)
 		else if (type.target < 0x10)
 		{
 			// initial color of tev color/output registers, often used for foreground/background
-			(&color_regs->r)[type.target - 4] = (uint16_t)value;
+			(&color_regs->r)[type.target - 4] = static_cast<uint16_t>(value);
 			return;
 		}
 		else if (type.target < 0x20)
