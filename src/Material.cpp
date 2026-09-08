@@ -180,13 +180,6 @@ void Material::Load(std::istream& file) {
 	{
 		IndStage stage{};
 
-		// NOTE: the previous version of this loop read this as
-		// `>> scale_s, scale_t;` -- the comma operator meant scale_t was
-		// never actually extracted from the stream (left uninitialized)
-		// and was never stored anywhere at all. The 4-byte IndStage
-		// struct has no padding, so the total bytes consumed happened to
-		// still line up (this didn't desync later fields), but the data
-		// itself was silently thrown away.
 		file >> BE >> stage.tex_coord >> stage.tex_map >> stage.scale_s >> stage.scale_t;
 
 		ind_stages.push_back(stage);
