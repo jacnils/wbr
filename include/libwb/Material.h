@@ -44,6 +44,7 @@ public:
 	static constexpr uint32_t MAX_TEX_SRT = 10;
 	static constexpr uint32_t MAX_TEX_GEN = 8;
 	static constexpr uint32_t MAX_IND_STAGES = 4;
+	static constexpr uint32_t MAX_IND_MATRICES = 3;
 	static constexpr uint32_t MAX_TEV_STAGES = 16;
 
 	static constexpr uint8_t PALETTE_DEFAULT = 0xFF;
@@ -101,14 +102,11 @@ private:
 
 	struct TextureSrt
 	{
-		TextureSrt()
-		{
-			translate.x = translate.y = rotate = 0.f;
-			scale.x = scale.y = 1.f;
-		}
-
-		Vec2f translate, scale;
-		float rotate;
+		float translate_s{0.0f};
+		float translate_t{0.0f};
+		float scale_s{1.0f};
+		float scale_t{1.0f};
+		float rotate{0.0};
 	};
 	std::vector<TextureSrt> texture_srts;
 

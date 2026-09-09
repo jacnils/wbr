@@ -37,7 +37,6 @@ namespace WiiBanner
 
 enum AnimationType : uint32_t
 {
-	//ANIMATION_TYPE_INVALID = 0x0,
 	ANIMATION_TYPE_PANE = MAKE_FOURCC('R', 'L', 'P', 'A'),
 	ANIMATION_TYPE_TEXTURE_SRT = MAKE_FOURCC('R', 'L', 'T', 'S'),
 	ANIMATION_TYPE_VISIBILITY = MAKE_FOURCC('R', 'L', 'V', 'I'),
