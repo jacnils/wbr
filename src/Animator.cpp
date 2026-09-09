@@ -246,35 +246,33 @@ StepKeyHandler::KeyData StepKeyHandler::GetFrame(FrameNumber frame_number) const
 	return frame_it->second;
 }
 
-float HermiteKeyHandler::GetFrame(FrameNumber frame_number) const
-{
+float HermiteKeyHandler::GetFrame(FrameNumber frame_number) const {
 	// assuming not empty, a safe assumption currently
 
 	// find the current keyframe, or the one after it
-	auto next = keys.lower_bound(frame_number);
+	std::multimap<FrameNumber, KeyData>::const_iterator next = keys.lower_bound(frame_number);
 
 	// current frame is higher than any keyframe, use the last keyframe
 	if (keys.end() == next)
 		--next;
 
-	auto prev = next;
+	std::multimap<FrameNumber, KeyData>::const_iterator prev = next;
 
 	// if this is after the current frame and not the first keyframe, use the previous one
 	if (frame_number < prev->first && keys.begin() != prev)
 		--prev;
 
 	const float nf = next->first - prev->first;
-	if (std::abs(nf) < 0.01)
-	{
+	if (fabs(nf) < 0.01) {
 		// same frame numbers, just return the first's value
 		return prev->second.value;
-	}
-	else
-	{
+	} else {
 		// different frames, blend them together
 		// this is a "Cubic Hermite spline" apparently
 
-		frame_number = Clamp(frame_number, prev->first, next->first);
+		frame_number = (frame_number < prev->first)
+			               ? prev->first
+			               : ((frame_number > next->first) ? next->first : frame_number);
 
 		const float t = (frame_number - prev->first) / nf;
 
@@ -283,10 +281,10 @@ float HermiteKeyHandler::GetFrame(FrameNumber frame_number) const
 
 		// curvy code from marcan, :p
 		return
-			prev->second.slope * nf * (t + powf(t, 3) - 2 * powf(t, 2)) +
-			next->second.slope * nf * (powf(t, 3) - powf(t, 2)) +
-			prev->second.value * (1 + (2 * powf(t, 3) - 3 * powf(t, 2))) +
-			next->second.value * (-2 * powf(t, 3) + 3 * powf(t, 2));
+				prev->second.slope * nf * (t + powf(t, 3) - 2 * powf(t, 2)) +
+				next->second.slope * nf * (powf(t, 3) - powf(t, 2)) +
+				prev->second.value * (1 + (2 * powf(t, 3) - 3 * powf(t, 2))) +
+				next->second.value * (-2 * powf(t, 3) + 3 * powf(t, 2));
 	}
 }
 

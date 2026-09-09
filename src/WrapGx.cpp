@@ -783,12 +783,10 @@ void CompiledTevStages::Compile(const TevStages& stages, const TexGens& texgens,
 			if (stage.ind_bias & 2) frag_ss << "ind_raw.g -= " << GlslFloat(bias_amount) << ";";
 			if (stage.ind_bias & 4) frag_ss << "ind_raw.b -= " << GlslFloat(bias_amount) << ";";
 
-			// TODO fix this crap
-			frag_ss << "vec2 stage_ind_offset = vec2(ind_raw.r, ind_raw.g) / 255.0;";
-			//frag_ss << "vec2 stage_ind_offset = vec2("
-			//"dot(ind_mtx_r0[" << mtx_index << "], vec3(ind_raw.rg, 1.0)),"
-			//"dot(ind_mtx_r1[" << mtx_index << "], vec3(ind_raw.rg, 1.0)))"
-			//" / 255.0;";
+			frag_ss << "vec2 stage_ind_offset = vec2("
+				"dot(ind_mtx_r0[" << mtx_index << "], vec3(ind_raw.rg, 1.0)),"
+				"dot(ind_mtx_r1[" << mtx_index << "], vec3(ind_raw.rg, 1.0)))"
+				" / 255.0;";
 
 			if (stage.ind_addprev)
 				frag_ss << "stage_ind_offset += ind_offset;";

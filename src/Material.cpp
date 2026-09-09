@@ -60,20 +60,10 @@ void Material::Load(std::istream& file) {
 	{
 		TextureSrt srt{};
 
-		file >> BE >> srt.translate.x >> srt.translate.y >> srt.rotate >> srt.scale.x >> srt.scale.y;
+		file >> BE >> srt.translate_s >> srt.translate_t >> srt.rotate >> srt.scale_s >> srt.scale_t;
 
 		texture_srts.push_back(srt);
 	}
-	//if (!flags.texture_srt)
-	//{
-	//	// set up defaults, this seems dumb/wrong
-	//	TextureSrt srt;
-
-	//	srt.rotate = srt.translate.x = srt.translate.y = 0.f;
-	//	srt.scale.x = srt.scale.y = 1.f;
-
-	//	texture_srts.push_back(std::move(srt));
-	//}
 
 	// texture coord gen
 	for (uint32_t i = 0; i != flags.texture_coord_gen; ++i)
@@ -85,15 +75,6 @@ void Material::Load(std::istream& file) {
 
 		texture_coord_gens.push_back(coord);
 	}
-	//if (!flags.texture_coord)
-	//{
-	//	// set up defaults, this seems dumb/wrong
-	//	TextureCoordGen coord;
-
-	//	coord.mtrx_src = 30;
-
-	//	texture_coord_gens.push_back(std::move(coord));
-	//}
 
 	// channel control
 	if (flags.channel_control)
@@ -160,20 +141,11 @@ void Material::Load(std::istream& file) {
 		file >> BE
 			>> srt.translate_s
 			>> srt.translate_t
+			>> srt.rotate
 			>> srt.scale_s
-			>> srt.scale_t
-			>> srt.rotate;
-
-		std::cout << "IndSrt: "
-		  << srt.translate_s << ", "
-		  << srt.translate_t << ", "
-		  << srt.scale_s << ", "
-		  << srt.scale_t << ", "
-		  << srt.rotate << '\n';
+			>> srt.scale_t;
 
 		ind_srts.push_back(srt);
-
-		//std::cout << "ind_texture: SRT\n";
 	}
 
 	// ind stage
@@ -184,11 +156,6 @@ void Material::Load(std::istream& file) {
 		file >> BE >> stage.tex_coord >> stage.tex_map >> stage.scale_s >> stage.scale_t;
 
 		ind_stages.push_back(stage);
-
-		std::cout << "ind_texture: " << name << " tex_coord: " << (int)stage.tex_coord
-			<< " tex_map: " << (int)stage.tex_map << '\n';
-
-		std::cout << "Ind Stages not yet supported !!\n";
 	}
 
 	// tev stage
@@ -374,9 +341,9 @@ void Material::Apply(const Resources& resources) const
 				glTranslatef(0.5f, 0.5f, 0.f);
 				glRotatef(srt.rotate, 0.f, 0.f, 1.f);
 
-				glScalef(srt.scale.x, srt.scale.y, 1.f);
+				glScalef(srt.scale_s, srt.scale_t, 1.f);
 
-				glTranslatef(srt.translate.x / srt.scale.x - 0.5f, srt.translate.y / srt.scale.y -0.5f, 0.f);
+				glTranslatef(srt.translate_s / srt.scale_s - 0.5f, srt.translate_t / srt.scale_t -0.5f, 0.f);
 			}
 		}
 
@@ -398,7 +365,7 @@ void Material::Apply(const Resources& resources) const
 	ApplyTextures(resources);
 
 	{
-	for (unsigned int i = 0; i != ind_srts.size() && i != MAX_IND_STAGES; ++i)
+	for (unsigned int i = 0; i != ind_srts.size() && i != MAX_IND_MATRICES; ++i)
 	{
 		const auto& srt = ind_srts[i];
 
@@ -512,39 +479,12 @@ void Material::Apply(const Resources& resources) const
 	glColor4ubv(&color.r);
 }
 
-void Material::ProcessHermiteKey(const KeyType& type, float value)
-{
-	if (type.type == ANIMATION_TYPE_TEXTURE_SRT)	// texture scale/rotate/translate
-	{
-		if (type.target < 5 && type.index < texture_srts.size())
-		{
+void Material::ProcessHermiteKey(const KeyType& type, float value) {
+	if (type.type == ANIMATION_TYPE_TEXTURE_SRT) {
+		if (type.target < 5 && type.index < texture_srts.size()) {
 			auto& srt = texture_srts[type.index];
 
-			float* const values[] =
-			{
-				&srt.translate.x,
-				&srt.translate.y,
-
-				&srt.rotate,
-
-				&srt.scale.x,
-				&srt.scale.y,
-			};
-
-			*values[type.target] = value;
-
-			return;
-		}
-		return;	// TODO: remove this return
-	}
-	else if (type.type == ANIMATION_TYPE_IND_MATERIAL)	// indirect texture SRT
-	{
-		if (type.target < 5 && type.index < ind_srts.size())
-		{
-			auto& srt = ind_srts[type.index];
-
-			float* const values[] =
-			{
+			float* const values[] = {
 				&srt.translate_s,
 				&srt.translate_t,
 
@@ -556,35 +496,43 @@ void Material::ProcessHermiteKey(const KeyType& type, float value)
 
 			*values[type.target] = value;
 		}
+	} else if (type.type == ANIMATION_TYPE_IND_MATERIAL) {
+		if (type.target < 5 && type.index < ind_srts.size()) {
+			auto& srt = ind_srts[type.index];
 
-		return;
-	}
-	else if (type.type == ANIMATION_TYPE_MATERIAL_COLOR)	// material color
-	{
-		if (type.target < 4)
-		{
-			// color
+			float* const values[] = {
+				&srt.translate_s,
+				&srt.translate_t,
+
+				&srt.rotate,
+
+				&srt.scale_s,
+				&srt.scale_t,
+			};
+
+			std::cout << "IndSrt[" << type.index << "] target=" << type.target
+		   << " -> S:" << srt.translate_s
+		   << " T:" << srt.translate_t
+		   << " R:" << srt.rotate
+		   << " Sx:" << srt.scale_s
+		   << " Sy:" << srt.scale_t << "\n";
+
+			*values[type.target] = value;
+		}
+	} else if (type.type == ANIMATION_TYPE_MATERIAL_COLOR) {
+		if (type.target < 4) {
 			(&color.r)[type.target] = (uint8_t)value;
-			return;
-		}
-		else if (type.target < 0x10)
-		{
-			// initial color of tev color/output registers, often used for foreground/background
+		} else if (type.target < 0x10) {
 			(&color_regs->r)[type.target - 4] = static_cast<uint16_t>(value);
-			return;
-		}
-		else if (type.target < 0x20)
-		{
-			// tev color constants
+		} else if (type.target < 0x20) {
 			(&color_constants->r)[type.target - 0x10] = (uint8_t)value;
-			return;
 		}
+	} else {
+		Base::ProcessHermiteKey(type, value);
 	}
-
-	Base::ProcessHermiteKey(type, value);
 }
 
-	void Material::ProcessStepKey(const KeyType& type, StepKeyHandler::KeyData data)
+void Material::ProcessStepKey(const KeyType& type, StepKeyHandler::KeyData data)
 {
 	if (type.type == ANIMATION_TYPE_TEXTURE_PALETTE)	// tpl palette
 	{
