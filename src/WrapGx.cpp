@@ -1,5 +1,6 @@
 /*
 Copyright (c) 2010 - Wii Banner Player Project
+Copyright (c) 2026 - Jacob Nilsson
 
 This software is provided 'as-is', without any express or implied
 warranty. In no event will the authors be held liable for any damages
@@ -756,7 +757,7 @@ void CompiledTevStages::Compile(const TevStages& stages, const TexGens& texgens,
 		if (stage_has_ind)
 		{
 			const IndStageProps& ind = ind_stages[stage.ind_texid];
-			const unsigned int mtx_index = stage.ind_mtxid;
+			const unsigned int mtx_index = stage.ind_mtxid - GX_ITM_0;
 
 			frag_ss << '{';
 
@@ -782,9 +783,12 @@ void CompiledTevStages::Compile(const TevStages& stages, const TexGens& texgens,
 			if (stage.ind_bias & 2) frag_ss << "ind_raw.g -= " << GlslFloat(bias_amount) << ";";
 			if (stage.ind_bias & 4) frag_ss << "ind_raw.b -= " << GlslFloat(bias_amount) << ";";
 
-			frag_ss << "vec2 stage_ind_offset = vec2("
-				"dot(ind_mtx_r0[" << mtx_index << "], vec3(ind_raw.rg, 1.0)),"
-				"dot(ind_mtx_r1[" << mtx_index << "], vec3(ind_raw.rg, 1.0)));";
+			// TODO fix this crap
+			frag_ss << "vec2 stage_ind_offset = vec2(ind_raw.r, ind_raw.g) / 255.0;";
+			//frag_ss << "vec2 stage_ind_offset = vec2("
+			//"dot(ind_mtx_r0[" << mtx_index << "], vec3(ind_raw.rg, 1.0)),"
+			//"dot(ind_mtx_r1[" << mtx_index << "], vec3(ind_raw.rg, 1.0)))"
+			//" / 255.0;";
 
 			if (stage.ind_addprev)
 				frag_ss << "stage_ind_offset += ind_offset;";
@@ -1186,15 +1190,18 @@ void 	GX_SetIndTexCoordScale (u8 ind_stage, u8 scale_s, u8 scale_t)
 	}
 }
 
-void 	GX_SetIndTexMatrix (u8 mtx_ind, Mtx23 offset_mtx, s8 scale_exp)
+void GX_SetIndTexMatrix(u8 mtx_ind, Mtx23 offset_mtx, s8 scale_exp)
 {
-	if (mtx_ind < 12)
-	{
-		IndTexMtx& m = g_ind_tex_mtx[mtx_ind];
-		memcpy(m.m, offset_mtx, sizeof(m.m));
-		m.scale_exp = scale_exp;
-		m.set = true;
-	}
+    if (mtx_ind >= GX_ITM_0 && mtx_ind <= GX_ITM_2)
+    {
+        const unsigned int index = mtx_ind - GX_ITM_0;
+
+        IndTexMtx& m = g_ind_tex_mtx[index];
+
+        memcpy(m.m, offset_mtx, sizeof(m.m));
+        m.scale_exp = scale_exp;
+        m.set = true;
+    }
 }
 
 void 	GX_SetNumIndStages (u8 num_stages)
