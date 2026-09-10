@@ -52,6 +52,7 @@ public:
 	};
 
 	void Load(std::istream& file);
+
 	virtual ~Pane();
 
 	void Render(const Resources& resources, uint8_t parent_alpha, bool widescreen) const;
@@ -72,8 +73,18 @@ public:
 	bool GetHide() const { return hide; }
 	void SetHide(bool _hide) { hide = _hide; }
 
-	uint8_t GetOriginX() const { return origin % 3; }
-	uint8_t GetOriginY() const { return 2 - origin / 3; }
+	uint8_t GetOriginX() const
+	{
+		return origin % 3;
+	}
+
+	uint8_t GetOriginY() const
+	{
+		return origin / 3;
+	}
+	uint8_t GetOrigin() const {
+		return origin;
+	}
 
 	float GetWidth() const { return width; }
 	float GetHeight() const { return height; }
@@ -112,6 +123,7 @@ private:
 	uint8_t flags;
 	uint8_t alpha;
 	bool hide;	// used by the groups
+	bool RootPane;
 
 	Vec3f translate, rotate;
 	Vec2f scale;

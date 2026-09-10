@@ -40,13 +40,15 @@ void Pane::Load(std::istream& file)
 
 	SetName(ReadFixedLengthString<NAME_LENGTH>(file));
 
-	ReadFixedLengthString<USER_DATA_LENGTH>(file);	// user data
+	auto data = ReadFixedLengthString<USER_DATA_LENGTH>(file);	// user data
 
 	file >> BE
 		>> translate.x >> translate.y >> translate.z
 		>> rotate.x >> rotate.y >> rotate.z
 		>> scale.x >> scale.y
 		>> width >> height;
+
+	RootPane = name == "RootPane";
 }
 
 Pane::~Pane()
@@ -191,8 +193,7 @@ void Quad::Load(std::istream& file)
 		ReadBEArray(file, &tex_coords[0].coords->s, sizeof(TexCoords) / sizeof(float) * tex_coord_count);
 }
 
-	void Quad::Draw(const Resources& resources, uint8_t render_alpha) const
-{
+void Quad::Draw(const Resources& resources, uint8_t render_alpha) const {
 	if (material_index < resources.materials.size())
 		resources.materials[material_index]->Apply(resources);
 
