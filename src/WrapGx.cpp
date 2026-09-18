@@ -631,8 +631,6 @@ void CompiledTevStages::Compile(const TevStages& stages, const TexGens& texgens,
 		}
 		else
 		{
-			std::cout << "GX_SetTexCoordGen: unsupported tgen_src " << (int)tg.tgen_src
-				<< " on texcoord " << i << ", falling back to gl_MultiTexCoord" << i << "\n";
 			src_vec = "vec4(gl_MultiTexCoord" + std::to_string(i) + ".st, 0.0, 1.0)";
 		}
 
@@ -649,14 +647,8 @@ void CompiledTevStages::Compile(const TevStages& stages, const TexGens& texgens,
 		}
 		else
 		{
-			std::cout << "GX_SetTexCoordGen: unrecognized mtxsrc " << (int)tg.mtxsrc
-				<< " on texcoord " << i << ", using identity\n";
 			mtx_expr = "mat4(1.0)";
 		}
-
-		if (tg.tgen_typ != GX_TG_MTX2x4 && tg.tgen_typ != GX_TG_MTX3x4)
-			std::cout << "GX_SetTexCoordGen: unsupported tgen_typ " << (int)tg.tgen_typ
-				<< " on texcoord " << i << ", treating as GX_TG_MTX2x4\n";
 
 		vert_ss << "gl_TexCoord[" << i << "] = " << mtx_expr << " * " << src_vec << ";";
 	}
@@ -747,13 +739,6 @@ void CompiledTevStages::Compile(const TevStages& stages, const TexGens& texgens,
 		const bool stage_has_ind = (stage.ind_mtxid >= GX_ITM_0 && stage.ind_mtxid <= GX_ITM_2)
 			&& (stage.ind_texid < ind_stages.size());
 
-		if (stage.ind_mtxid != GX_ITM_OFF && !stage_has_ind)
-		{
-			std::cout << "Material: unsupported indirect matrix id " << (int)stage.ind_mtxid
-				<< " (or indirect stage " << (int)stage.ind_texid << " not configured)"
-				<< ", disabling indirect for this stage\n";
-		}
-
 		if (stage_has_ind)
 		{
 			const IndStageProps& ind = ind_stages[stage.ind_texid];
@@ -792,12 +777,6 @@ void CompiledTevStages::Compile(const TevStages& stages, const TexGens& texgens,
 				frag_ss << "stage_ind_offset += ind_offset;";
 
 			frag_ss << "ind_offset = stage_ind_offset;";
-
-			if (stage.ind_wrap_s != GX_ITW_OFF || stage.ind_wrap_t != GX_ITW_OFF)
-			{
-				std::cout << "Material: indirect wrap modes (" << (int)stage.ind_wrap_s
-					<< ", " << (int)stage.ind_wrap_t << ") aren't emulated, ignoring\n";
-			}
 
 			if (stage.ind_alpha != GX_ITBA_OFF)
 			{
@@ -997,8 +976,6 @@ void CompiledTevStages::Compile(const TevStages& stages, const TexGens& texgens,
 
 	frag_ss << '}';
 
-	//std::cout << frag_ss.str() << '\n';
-
 	// create/compile fragment shader
 	fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
 
@@ -1023,12 +1000,11 @@ void CompiledTevStages::Compile(const TevStages& stages, const TexGens& texgens,
 
 	if (!vert_compiled) {
 		std::cout << "Failed to compile vertex shader\n";
-		std::cout << vert_ss.str() << "\n";
 	}
 
-	if (!frag_compiled)
+	if (!frag_compiled) {
 		std::cout << "Failed to compile fragment shader\n";
-		std::cout << frag_ss.str() << "\n";
+	}
 	}
 
 	// create program, attach shaders
